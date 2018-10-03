@@ -3,7 +3,12 @@ isinstalled(pkg::AbstractString) =
 
 asl_pkgs = ["BulletCollision", "AstrobeeRobot", "PandaRobot"]
 for pkg in asl_pkgs
-  isinstalled(pkg) && continue
+  if isinstalled(pkg)
+    println("$pkg already installed")
+    continue
+  else
+    println("Cloning out $pkg")
+  end
   Pkg.clone("git://github.com/StanfordASL/$pkg.jl.git")
   Pkg.build(pkg)
 end

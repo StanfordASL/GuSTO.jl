@@ -33,20 +33,20 @@ function DubinsCar()
 end
 
 function SCPParam(model::DubinsCar, fixed_final_time::Bool)
-  convergence_threshold = 0.001
+  convergence_threshold = 0.1
 
   SCPParam(fixed_final_time, convergence_threshold)
 end
 
 function SCPParam_GuSTO(model::DubinsCar)
-  Delta0 = 1000.
+  Delta0 = 10000.
   omega0 = 1.
   omegamax = 1.0e10
   epsilon = 1.0e-6
-  rho0 = 0.1
-  rho1 = 0.5
+  rho0 = 0.4
+  rho1 = 1.5 
   beta_succ = 2.
-  beta_fail = 0.6
+  beta_fail = 0.5
   gamma_fail = 5.
 
   SCPParam_GuSTO(Delta0, omega0, omegamax, epsilon, rho0, rho1, beta_succ, beta_fail, gamma_fail)
@@ -105,7 +105,7 @@ end
 
 function update_model_params!(SCPP::SCPProblem{Car, DubinsCar, E}, traj_prev::Trajectory) where E
 	N, robot, model = SCPP.N, SCPP.PD.robot, SCPP.PD.model
-	X, U, f, A = traj.X, traj.U, model.f, model.A
+	X, U, f, A = traj_prev.X, traj_prev.U, model.f, model.A
 
 	for k = 1:N-1
 		update_f!(f[k], X[:,k], U[:,k], robot, model)
