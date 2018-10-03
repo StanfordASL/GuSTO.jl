@@ -44,8 +44,6 @@ function Plane{T}() where T
   phi_d_lim = (pi/3)*2      # phi_dot lim
   alpha_d_lim = 2*gamma_max # alpha_dot lim
 
-  # TODO(acauligi): Which of these is correct?
-  btCollisionObject = BulletCollision.box(SVector{3}(zeros(3)),SVector{3}(2.,2.,0.4))
   btCollisionObject = BulletCollision.sphere(SVector{3}(zeros(3)), 1.)
 
   return Plane{T}(mass,g,rho,Area,Cd0,Kd,alpha_0,v_hat,v_min,v_max,gamma_max,phi_max,acc_lim,phi_d_lim,alpha_d_lim,btCollisionObject)

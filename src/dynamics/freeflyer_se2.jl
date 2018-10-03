@@ -150,16 +150,15 @@ function dynamics_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{Free
   # Where i is the state index, and k is the timestep index
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_freeflyerSE2(traj, traj_prev, SCPP)
 
-  # Exact dynamics propagation TODO(acauligi): Which version to keep?
   return A_dyn_discrete(X[:,k],dtp,robot,model)*X[:,k] + B_dyn_discrete(X[:,k],dtp,robot,model)*U[:,k] - X[:,k+1]
 
-  fp, Ap, Bp = get_f(k, model), get_A(k, model), get_B(k, model)
-  if k == N-1
-    return Tf*fp + Tfp*(Ap*(X[:,k]-Xp[:,k]) + Bp*(U[:,k]-Up[:,k])) - (X[:,k+1]-X[:,k])/dh
-  else
-    return 0.5*(Tf*(fp + get_f(k+1, model)) + Tfp*(Ap*(X[:,k]-Xp[:,k]) + Bp*(U[:,k]-Up[:,k])) +
-      Tfp*(Ap*(X[:,k+1]-Xp[:,k+1]) + Bp*(U[:,k+1]-Up[:,k+1]))) - (X[:,k+1]-X[:,k])/dh
-  end
+  # fp, Ap, Bp = get_f(k, model), get_A(k, model), get_B(k, model)
+  # if k == N-1
+  #   return Tf*fp + Tfp*(Ap*(X[:,k]-Xp[:,k]) + Bp*(U[:,k]-Up[:,k])) - (X[:,k+1]-X[:,k])/dh
+  # else
+  #   return 0.5*(Tf*(fp + get_f(k+1, model)) + Tfp*(Ap*(X[:,k]-Xp[:,k]) + Bp*(U[:,k]-Up[:,k])) +
+  #     Tfp*(Ap*(X[:,k+1]-Xp[:,k+1]) + Bp*(U[:,k+1]-Up[:,k+1]))) - (X[:,k+1]-X[:,k])/dh
+  # end
 end
 
 # Get current dynamics structures for a time step

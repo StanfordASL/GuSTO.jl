@@ -157,7 +157,6 @@ function add_constraints_gusto_cvx(SCPV::SCPVariables, traj_prev::Trajectory, SC
 
 	if !SCPP.param.fixed_final_time
 		constraints += SCPV.Tf > 0.1
-		# constraints += SCPV.Tf < 50.  # TODO(ambyld): Add maximum final time?
 	end
 
 	return constraints

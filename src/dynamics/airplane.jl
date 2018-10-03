@@ -317,6 +317,7 @@ function update_A!(A, x::Vector, robot::Robot, model::Airplane)
   g, rho, Area, mass = robot.g, robot.rho, robot.Area, robot.mass
   Cd0, Kd = robot.Cd0, robot.Kd
 
+  # See scripts/symbolic_math.m for derivation of these equations
   A[1,4:6] = [-v*cos(gamma)*sin(psi) cos(gamma)*cos(psi) -v*cos(psi)*sin(gamma)]
   A[2,4:6] = [ v*cos(gamma)*cos(psi) cos(gamma)*sin(psi) -v*sin(gamma)*sin(psi)]
   A[3,5:6] = [                       sin(gamma)           v*cos(gamma)]
@@ -324,7 +325,7 @@ function update_A!(A, x::Vector, robot::Robot, model::Airplane)
   A[4,6] = -(pi*Area*alpha*rho*v*sin(gamma)*sin(phi))/(mass*cos(gamma)^2)
   A[4,7] = -(pi*Area*alpha*rho*v*cos(phi))/(mass*cos(gamma))
   A[4,8] = -(pi*Area*rho*v*sin(phi))/(mass*cos(gamma))
-  A[5,5] = -(2*Area*rho*v*((39.4784*Kd*alpha^2)/ + Cd0))/mass   # TODO(acauligi): What are these magic numbers
+  A[5,5] = -(2*Area*rho*v*((39.4784*Kd*alpha^2)/ + Cd0))/mass
   A[5,6] = -g*cos(gamma)
   A[5,8] = -(78.9568*Area*Kd*alpha*rho*v^2)/mass
   A[6,5] = (g*cos(gamma))/v^2 + (pi*Area*alpha*rho*cos(phi))/mass

@@ -187,7 +187,7 @@ function update_A!(A, x::Vector, robot::Robot, model::AstrobeeSE3)
   px, py, pz = x[7:9] 
   wx, wy, wz = x[10:12]
 
-  # SO(3)
+  # See scripts/symbolic_math.m for derivation of these equations
   A[7,7] = (px*wx)/2+(py*wy)/2+(pz*wz)/2 
   A[7,8] = wz/2+(px*wy)/2-(py*wx)/2
   A[7,9] = (px*wz)/2-wy/2-(pz*wx)/2
