@@ -1,0 +1,6 @@
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
+
+src/**/*.h5
+examples/**/.ipynb_checkpoints
