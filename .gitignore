@@ -3,4 +3,4 @@
 *.jl.mem
 
 src/**/*.h5
-examples/**/.ipynb_checkpoints
+**/.ipynb_checkpoints

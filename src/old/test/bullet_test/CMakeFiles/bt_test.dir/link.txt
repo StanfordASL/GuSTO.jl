@@ -1,1 +1,0 @@
-/usr/bin/c++   -g -Wall -Werror -std=c++11 -g   CMakeFiles/bt_test.dir/hello_bullet.cpp.o  -o bt_test -rdynamic -lBulletDynamics -lBulletCollision -lLinearMath -lBulletSoftBody 
