@@ -1,6 +1,8 @@
 GuSTO.jl
 ========
 
+This is a suite for trajectory optimization using the Guaranteed Sequential Trajectory Optimization (GuSTO) framework. Details can be found in [this paper](http://asl.stanford.edu/wp-content/papercite-data/pdf/Bonalli.Cauligi.Bylard.Pavone.ICRA19.pdf).
+
 Installation
 ------------
 The code has been tested for Ubuntu 16.04 and requires [julia v0.6.4](https://julialang.org/downloads/oldreleases.html). To install GuSTO, run the following command from the Julia REPL:
