@@ -384,12 +384,13 @@ end
 function trust_region_ratio_gusto(traj, traj_prev::Trajectory, SCPP::SCPProblem{Freeflyer{T}, FreeflyerSE2, E}) where {T,E}
   # Where i is the state index, and k is the timestep index
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_freeflyerSE2(traj, traj_prev, SCPP)
-  fp, Ap = model.f, model.A
+  fp, Ap, Bp = model.f, model.A, model.B
   num,den = 0, 0 
   env_ = WS.btenvironment_keepout
 
   for k in 1:N-1
-    linearized = fp[k] + Ap*(X[:,k]-Xp[:,k])
+    #linearized = fp[k] + Ap*(X[:,k]-Xp[:,k])
+    linearized = fp[k] + Ap*(X[:,k]-Xp[:,k]) + Bp*(U[:,k]-Up[:,k])
     num += norm(f_dyn(X[:,k],U[:,k],robot,model) - linearized)
     den += norm(linearized)
   end
