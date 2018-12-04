@@ -3,6 +3,7 @@ include("dynamics/blankdynamics.jl")
 include("dynamics/freeflyer_se2.jl")
 include("dynamics/astrobee_se2.jl")
 include("dynamics/astrobee_se3.jl")
+include("dynamics/astrobee_se3_manifold.jl")
 include("dynamics/airplane.jl")
 include("dynamics/dubins_car.jl")
 
