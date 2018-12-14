@@ -41,7 +41,11 @@ function solve_SCP!(TOS::TrajectoryOptimizationSolution, TOP::TrajectoryOptimiza
 	SCPP = SCPProblem(TOP)
 
 	# Create initialization trajectory
-	traj_init = init_method(TOP)
+	if isdefined(:init_with_TOS) && (init_method == init_with_TOS)
+		traj_init = init_with_TOS(TOS, TOP)
+	else
+		traj_init = init_method(TOP)
+	end
 
 	# Run SCP with initialization trajectory
 	SCPS = SCPSolution(SCPP, traj_init)

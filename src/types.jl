@@ -43,7 +43,7 @@ end
 
 mutable struct TrajectoryOptimizationProblem{R<:Robot, D<:DynamicsModel, E<:Environment}
 	PD::ProblemDefinition{R,D,E}
-  WS::Workspace
+  	WS::Workspace
 	fixed_final_time::Bool
 
 	N 				# Discretization steps

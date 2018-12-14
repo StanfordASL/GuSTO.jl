@@ -1,5 +1,6 @@
 export DubinsCar
 export init_traj_nothing, init_traj_straightline
+export simulate_trajectory
 
 mutable struct DubinsCar <: DynamicsModel
 	x_dim	# x, y, theta
@@ -28,7 +29,7 @@ function DubinsCar()
 	x_min = -x_max
 	u_max = 10.
 	u_min = -u_max
-	clearance = 0.01
+	clearance = 0.0001
 	DubinsCar(x_dim, u_dim, v, k, x_min, x_max, u_min, u_max, clearance, [], [], [])
 end
 
@@ -183,10 +184,61 @@ function B_dyn(x::Vector, robot::Robot, model::DubinsCar)
   [0; 0; model.k]
 end
 
+## Nonconvex state inequality constraints
+function ncsi_obstacle_avoidance_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{Car, DubinsCar, E}, k::Int, i::Int) where E
+  # println("[ncsi_obstacle_avoidance_constraints]")
+  X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_dubinscar(traj, traj_prev, SCPP)
+
+  rb_idx, env_idx = 1, i
+  env_ = WS.btenvironment_keepout
+
+  clearance = model.clearance 
+
+  r = [X[1:2,k]; 0.]
+  dist,xbody,xobs = BulletCollision.distance(env_,rb_idx,r,env_idx)
+
+  # See Eq. 12b in "Convex optimization for proximity maneuvering of a spacecraft with a robotic manipulator"
+  return clearance - dist
+end
+## Nonconvex state inequality constraints (convexified)
+function ncsi_obstacle_avoidance_constraints_convexified(traj, traj_prev::Trajectory, SCPP::SCPProblem{Car, DubinsCar, E}, k::Int, i::Int) where E
+  # println("[ncsi_obstacle_avoidance_constraints_convexified]")
+  X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_dubinscar(traj, traj_prev, SCPP)
+
+  rb_idx, env_idx = 1, i
+  env_ = WS.btenvironment_keepout
+
+  clearance = model.clearance
+
+  r0 = get_workspace_location(traj_prev, SCPP, k)
+  dist, xbody, xobs = BulletCollision.distance(env_, rb_idx, r0, env_idx)
+
+  if dist < SCPP.param.obstacle_toggle_distance
+    r = get_workspace_location(traj, SCPP, k)
+
+    # See Eq. 12b in "Convex optimization for proximity maneuvering of a spacecraft with a robotic manipulator"
+    nhat = dist > 0 ?
+      (xbody-xobs)./norm(xbody-xobs) :
+      (xobs-xbody)./norm(xobs-xbody)
+
+      #println("[ncsi_obstacle_avoidance_constraints_convexified] nhat: $nhat norm(xbody-xobs): $(norm(xbody-xobs)) dist: $dist")
+    return (clearance - (dist + nhat'*(r-r0)))
+  else
+    return 0.
+  end
+end
+
+function get_workspace_location(traj, SCPP::SCPProblem{Car, DubinsCar, E}, k::Int, i::Int=0) where E
+  return [traj.X[1:2,k]; 0.]
+end
+
+
+
 ## Constructing full list of constraint functions
 function SCPConstraints(SCPP::SCPProblem{Car, DubinsCar, E}) where E
 	model = SCPP.PD.model
 	x_dim, u_dim, N = model.x_dim, model.u_dim, SCPP.N
+  	WS = SCPP.WS
 
 	SCPC = SCPConstraints()
 
@@ -212,9 +264,24 @@ function SCPConstraints(SCPP::SCPProblem{Car, DubinsCar, E}) where E
 	end
 
 	## Nonconvex state equality constraints
+	nothing
+
 	## Nonconvex state inequality constraints
+	env_ = WS.btenvironment_keepout
+	for k = 1:N, i = 1:length(env_.convex_env_components)
+		push!(SCPC.nonconvex_state_ineq, (ncsi_obstacle_avoidance_constraints, k, i))
+	end
+
 	## Nonconvex state equality constraints (convexified)
+	nothing
+
 	## Nonconvex state inequality constraints (convexified)
+	env_ = WS.btenvironment_keepout
+	for k = 1:N, i = 1:length(env_.convex_env_components)
+		push!(SCPC.nonconvex_state_convexified_ineq, (ncsi_obstacle_avoidance_constraints_convexified, k, i))
+	end
+
+
 	## Convex control equality constraints
 	nothing
 
@@ -234,12 +301,35 @@ function trust_region_ratio_gusto(traj, traj_prev::Trajectory, SCPP::SCPProblem{
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_astrobeeSE2(traj, traj_prev, SCPP)
   fp, Ap, Bp = model.f, model.A, model.B
   num, den = 0, 0
+  env_ = WS.btenvironment_keepout
 
+  # Nonlinear Dynamics
   for k in 1:N-1
     #linearized = fp[k] + Ap[k]*(X[:,k]-Xp[:,k])
     linearized = fp[k] + Ap[k]*(X[:,k]-Xp[:,k]) + Bp*(U[1,k]-Up[1,k])
     num += norm(f_dyn(X[:,k],U[:,k],robot,model) - linearized)
     den += norm(linearized)
+  end
+
+  # Nonlinear Obstacle Collision Avoidance Constraints
+  clearance = model.clearance 
+  for k in 1:N
+    r0 = get_workspace_location(traj, SCPP, k)
+    r = get_workspace_location(traj_prev, SCPP, k)
+    for (rb_idx,body_point) in enumerate(env_.convex_robot_components)
+      for (env_idx,convex_env_component) in enumerate(env_.convex_env_components)
+        dist,xbody,xobs = BulletCollision.distance(env_,rb_idx,r0,env_idx)
+        nhat = dist > 0 ?
+          (xbody-xobs)./norm(xbody-xobs) :
+          (xobs-xbody)./norm(xobs-xbody) 
+        linearized = clearance - (dist + nhat'*(r-r0))
+        
+        dist,xbody,xobs = BulletCollision.distance(env_,rb_idx,r,env_idx)
+
+        num += abs((clearance-dist) - linearized) 
+        den += abs(linearized) 
+      end
+    end
   end
 
   return num/den
@@ -346,4 +436,56 @@ function add_nonlinear_constraints!(solver_model::Model, SCPV::SCPVariables, tra
 		@constraint(solver_model, X[i,1] == x_init[i])
 		@constraint(solver_model, X[i,N] == x_goal[i])
 	end
+end
+
+function verify_collision_free(traj::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3, E}) where {T,E}
+  model, WS = SCPP.PD.model, SCPP.WS
+  N = SCPP.N
+
+  rb_idx = 1
+  env_ = WS.btenvironment_keepout
+
+  clearance = model.clearance
+
+  for env_idx = 1:length(env_.convex_env_components)
+    for k = 1:N
+      r = get_workspace_location(traj, SCPP, k)
+      dist, xbody, xobs = BulletCollision.distance(env_, rb_idx, r, env_idx)
+      if dist < 0
+        return false, k, dist
+      end
+    end
+  end
+
+  return true, 0, 0.
+end
+
+
+
+
+###########
+# Dynamics 
+###########
+function simulate_trajectory(x_init, U, dt, Tf, SCPP::SCPProblem{Car, DubinsCar, E}) where E
+	N, robot, model = SCPP.N, SCPP.PD.robot, SCPP.PD.model
+	x_dim = model.x_dim
+	#U, dt, Tf = traj.U, traj.dt, traj.Tf
+
+	X = zeros(x_dim, N)
+	X[:,1] = x_init
+	for k in 1:N-1
+		Ustep = U[:,k]
+
+		# Simulate one step forwards
+		k1 = f_dyn(X[:,k],Ustep,robot,model)
+		x2 = X[:,k] + 0.5*dt*k1
+		k2 = f_dyn(x2,Ustep,robot,model)
+		x3 = X[:,k] + 0.5*dt*k2
+		k3 = f_dyn(x3,Ustep,robot,model)
+		x4 = X[:,k] + dt*k3
+		k4 = f_dyn(x4,Ustep,robot,model)
+		X[:,k+1] = X[:,k] + 1/6*dt*(k1 + 2*k2 + 2*k3 + k4)
+	end
+
+	return Trajectory(X, U, Tf)
 end

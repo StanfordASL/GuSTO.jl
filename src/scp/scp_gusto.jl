@@ -41,10 +41,10 @@ function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", m
 		set_default_solver(MosekSolver(; kwarg...))
 	elseif solver == "Gurobi"
 		set_default_solver(GurobiSolver(; kwarg...))
-  else
+	else
 		set_default_solver(SCSSolver(; kwarg...))
 	end
-	
+
 	N = SCPP.N
 	param, model = SCPP.param, SCPP.PD.model
 
@@ -52,7 +52,7 @@ function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", m
 	Delta0, omega0, omegamax, rho0, rho1 = param.alg.Delta0, param.alg.omega0, param.alg.omegamax, param.alg.rho0, param.alg.rho1
 	beta_succ, beta_fail, gamma_fail = param.alg.beta_succ, param.alg.beta_fail, param.alg.gamma_fail
 	Delta_vec, omega_vec, rho_vec = param.alg.Delta_vec, param.alg.omega_vec, param.alg.rho_vec
-  trust_region_satisfied_vec, convex_ineq_satisfied_vec = param.alg.trust_region_satisfied_vec, param.alg.convex_ineq_satisfied_vec
+	trust_region_satisfied_vec, convex_ineq_satisfied_vec = param.alg.trust_region_satisfied_vec, param.alg.convex_ineq_satisfied_vec
 
 
 	iter_cap = SCPS.iterations + max_iter
@@ -60,12 +60,12 @@ function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", m
 	SCPC = SCPConstraints(SCPP)
 
 	initialize_model_params!(SCPP, SCPS.traj)
-  push!(SCPS.J_true, cost_true(SCPS.traj, SCPS.traj, SCPP))
+  	push!(SCPS.J_true, cost_true(SCPS.traj, SCPS.traj, SCPP))
 	push!(rho_vec, trust_region_ratio_gusto(SCPS.traj, SCPS.traj, SCPP))
 	param.obstacle_toggle_distance = Delta_vec[end]/8 + model.clearance # TODO: Generalize clearance
 
-  first_time = true
-  prob = minimize(0.)
+	first_time = true
+	prob = minimize(0.)
 	while (SCPS.iterations < iter_cap)
 		tic()
 
@@ -77,11 +77,11 @@ function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", m
 		first_time = false
 
 		push!(SCPS.prob_status, prob.status)
-    if prob.status != :Optimal
-      warn("GuSTO SCP iteration failed to find an optimal solution")
-      push!(SCPS.iter_elapsed_times,toq()) 
-      return
-    end
+	    if prob.status != :Optimal
+	      warn("GuSTO SCP iteration failed to find an optimal solution")
+	      push!(SCPS.iter_elapsed_times,toq()) 
+	      return
+	    end
 
 		# Recover solution
 		new_traj = Trajectory(SCPV.X.value, SCPV.U.value, SCPV.Tf.value[1])
@@ -93,8 +93,8 @@ function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", m
 		push!(trust_region_satisfied_vec, trust_region_satisfied_gusto(new_traj, SCPS.traj, SCPP))
 		push!(convex_ineq_satisfied_vec, convex_ineq_satisfied_gusto(new_traj, SCPS.traj, SCPC, SCPP))
 
-    if trust_region_satisfied_vec[end]
-    	push!(rho_vec, trust_region_ratio_gusto(new_traj, SCPS.traj, SCPP))			
+	    if trust_region_satisfied_vec[end]
+	    	push!(rho_vec, trust_region_ratio_gusto(new_traj, SCPS.traj, SCPP))			
 			if rho_vec[end] > rho1
 				push!(SCPS.accept_solution, false)
 				push!(Delta_vec, beta_fail*Delta_vec[end])
@@ -105,6 +105,7 @@ function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", m
 				!convex_ineq_satisfied_vec[end] ? push!(omega_vec, gamma_fail*omega_vec[end]) : push!(omega_vec, omega0)
 			end
 		else
+			println("SCPS.accept_solution, false")
 			push!(SCPS.accept_solution, false)
 			push!(Delta_vec, Delta_vec[end])
 			push!(omega_vec, gamma_fail*omega_vec[end])
