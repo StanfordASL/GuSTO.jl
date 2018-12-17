@@ -89,7 +89,7 @@ function solve_trajopt_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek",
         break
       end
       for trust_iteration in 1:max_trust_iteration
-        tic()
+        time_start = time_ns()
         # Set up, solve problem
 				prob.objective = cost_full_convexified_trajopt(SCPV, old_convex_traj, SCPC, SCPP)
 				prob.constraints = add_constraints_trajopt_cvx(SCPV, old_convex_traj, SCPC, SCPP)
@@ -99,7 +99,7 @@ function solve_trajopt_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek",
 		    push!(SCPS.prob_status, prob.status)
         if prob.status != :Optimal
           warn("TrajOpt failed find optimal solution")
-		      push!(SCPS.iter_elapsed_times,toq()) 
+		      push!(SCPS.iter_elapsed_times, (time_ns() - time_start)/10^9) 
           return
         end
 
@@ -120,7 +120,7 @@ function solve_trajopt_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek",
         end
         
         copy!(SCPS.traj, new_traj)
-        iter_elapsed_time = toq()
+        iter_elapsed_time = (time_ns() - time_start)/10^9
         push!(SCPS.J_true, cost_true(new_traj, SCPS.traj, SCPP))
         push!(SCPS.iter_elapsed_times, iter_elapsed_time)
         SCPS.total_time += iter_elapsed_time

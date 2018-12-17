@@ -89,7 +89,7 @@ function init_traj_straightline(TOP::TrajectoryOptimizationProblem{Freeflyer{T},
   x_dim, u_dim, N, tf_guess = model.x_dim, model.u_dim, TOP.N, TOP.tf_guess
   N = TOP.N
 
-  X = hcat(linspace(x_init, x_goal, N)...)
+  X = hcat(range(x_init, stop=x_goal, length=N)...)
   U = zeros(u_dim, N)
   Trajectory(X, U, tf_guess)
 end
@@ -114,7 +114,7 @@ function initialize_model_params!(SCPP::SCPProblem{Freeflyer{T}, FreeflyerSE2, E
 
   SCPP.PD.robot.Jcollision = []
   for k = 1:N
-    push!(SCPP.PD.robot.Jcollision, [eye(2) zeros(2,1); zeros(1,3)])
+    push!(SCPP.PD.robot.Jcollision, [Eye(2) zeros(2,1); zeros(1,3)])
   end
   update_model_params!(SCPP, traj_prev)
 end
@@ -181,12 +181,12 @@ function update_f!(f, x::Vector, u::Vector, robot::Robot, model::FreeflyerSE2)
 end
 
 function A_dyn(x::Vector, robot::Robot, model::FreeflyerSE2)
-  kron([0 1; 0 0], eye(3))
+  kron([0 1; 0 0], Eye(3))
 end
 
 function B_dyn(x::Vector, robot::Robot, model::FreeflyerSE2)
   B = zeros(6,3)
-  B[1:6,1:3] = kron([0;1], eye(3))
+  B[1:6,1:3] = kron([0;1], Eye(3))
   B[4:5,:] = 1/robot.mass_ff * B[4:5,:]
   B[6,:] = robot.J_ff_inv * B[6,:]
   return B
@@ -195,12 +195,12 @@ end
 # Generate full discrete update version of dynamics matrices for a time step
 # TODO(ambyld): Rename these? Initialize these once?
 function A_dyn_discrete(x, dt, robot::Robot, model::FreeflyerSE2)
-  kron([1 dt; 0 1], eye(3))
+  kron([1 dt; 0 1], Eye(3))
 end
 
 function B_dyn_discrete(x, dt, robot::Robot, model::FreeflyerSE2)
   Jzz_inv = robot.J_ff_inv
-  B = [0.5*dt^2*eye(3); dt*eye(3)]
+  B = [0.5*dt^2*Eye(3); dt*Eye(3)]
   B[1:2,:] *= 1/robot.mass_ff  # translational force -> acceleration
   B[4:5,:] *= 1/robot.mass_ff
   B[3,:] *= Jzz_inv      # rotational moment -> acceleration
@@ -492,24 +492,24 @@ end
 # Dynamics 
 ##################
 function A_SE2(rb::Freeflyer)
-  kron([0 1; 0 0], eye(3))
+  kron([0 1; 0 0], Eye(3))
 end
 
 function B_SE2(rb::Freeflyer)
   B = zeros(6,3)
-  B[1:6,1:3] = kron([0;1], eye(3))
+  B[1:6,1:3] = kron([0;1], Eye(3))
   B[4:5,:] = 1/rb.mass_ff * B[4:5,:]
   B[6,:] = rb.J_ff_inv * B[6,:]
   return B
 end
 
 function Ak_SE2(rb::Freeflyer, dt)
-  kron([1 dt; 0 1], eye(3))
+  kron([1 dt; 0 1], Eye(3))
 end
 
 function Bk_SE2(rb::Freeflyer, dt)
   Jzz_inv = robot.J_ff_inv
-  Bk = [0.5*dt^2*eye(3); dt*eye(3)]
+  Bk = [0.5*dt^2*Eye(3); dt*Eye(3)]
   Bk[1:2,:] *= 1/rb.mass_ff  # translational force -> acceleration
   Bk[4:5,:] *= 1/rb.mass_ff
   Bk[3,:] *= Jzz_inv      # rotational moment -> acceleration

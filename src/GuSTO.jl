@@ -1,6 +1,5 @@
-#__precompile__()
-# __precompile__(false)
-# module GuSTO
+# __precompile__()
+module GuSTO
 
 using BulletCollision
 
@@ -14,7 +13,7 @@ using FileIO
 using MeshIO
 using MechanismGeometries
 using ForwardDiff
-import GeometryTypes: HyperRectangle, HyperSphere, HomogenousMesh, Vec, Vec3f0, Point, Point3f0
+import GeometryTypes: HyperRectangle, HyperSphere, HomogenousMesh
 import ColorTypes: RGB, RGBA
 
 using StaticArrays
@@ -26,6 +25,8 @@ using NLsolve, DifferentialEquations
 
 using MAT
 using GeometryTypes
+using FillArrays
+using LinearAlgebra
 
 include("types.jl")
 
@@ -39,4 +40,4 @@ include("robot.jl")
 include("dynamics.jl")
 include("environment.jl")
 
-# end
+end

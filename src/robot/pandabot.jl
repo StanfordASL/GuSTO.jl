@@ -53,7 +53,7 @@ function PandaBot{T}() where T
   # hard_limit_accel = 0.1 
   # hard_limit_omega = 45*pi/180 
   # hard_limit_alpha = 50*pi/180 
-  # J = 0.1083*eye(3) 
+  # J = 0.1083*Eye(3) 
   # Jinv = inv(J)
   btCollisionObject = BT.sphere(SVector{3}(zeros(T,3)), r) # Update this
 

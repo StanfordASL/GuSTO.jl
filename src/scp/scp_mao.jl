@@ -51,7 +51,7 @@ function solve_mao_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", max
 	first_time = true
   prob = minimize(0.)
 	while (SCPS.iterations <= iter_cap)
-		tic()
+		time_start = time_ns()
 
 		# Set up, solve problem
 		prob.objective = cost_full_convexified_mao(SCPV, SCPS.traj, SCPC, SCPP)
@@ -62,7 +62,7 @@ function solve_mao_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", max
 		push!(SCPS.prob_status, prob.status)
     if prob.status != :Optimal
       warn("SCP-Mao failed find optimal solution")
-		  push!(SCPS.iter_elapsed_times,toq()) 
+		  push!(SCPS.iter_elapsed_times, (time_ns() - time_start)/10^9) 
       return
     end
   

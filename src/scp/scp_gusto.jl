@@ -38,12 +38,14 @@ function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", m
 	#   force - Set true to force further refinement iterations despite convergence
 
 	if solver == "Mosek"
-		set_default_solver(MosekSolver(; kwarg...))
+		default_solver = MosekSolver(; kwarg...)
 	elseif solver == "Gurobi"
-		set_default_solver(GurobiSolver(; kwarg...))
+		default_solver = GurobiSolver(; kwarg...)
   else
-		set_default_solver(SCSSolver(; kwarg...))
+		default_solver = SCSSolver(; kwarg...)
 	end
+
+
 	
 	N = SCPP.N
 	param, model = SCPP.param, SCPP.PD.model
@@ -67,19 +69,19 @@ function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", m
   first_time = true
   prob = minimize(0.)
 	while (SCPS.iterations < iter_cap)
-		tic()
+		time_start = time_ns()
 
 		# Set up, solve problem
 		update_model_params!(SCPP, SCPS.traj)
 		prob.objective = cost_full_convexified_gusto(SCPV, SCPS.traj, SCPC, SCPP)
 		prob.constraints = add_constraints_gusto_cvx(SCPV, SCPS.traj, SCPC, SCPP)
-		Convex.solve!(prob, warmstart=!first_time)
+		Convex.solve!(prob, default_solver, warmstart=!first_time)
 		first_time = false
 
 		push!(SCPS.prob_status, prob.status)
     if prob.status != :Optimal
       warn("GuSTO SCP iteration failed to find an optimal solution")
-      push!(SCPS.iter_elapsed_times,toq()) 
+      push!(SCPS.iter_elapsed_times, (time_ns() - time_start)/10^9) 
       return
     end
 
@@ -118,7 +120,7 @@ function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", m
 		end
 		param.obstacle_toggle_distance = Delta_vec[end]/8 + model.clearance
 
-		iter_elapsed_time = toq()
+		iter_elapsed_time = (time_ns() - time_start)/10^9
 		push!(SCPS.iter_elapsed_times, iter_elapsed_time)
 		SCPS.total_time += iter_elapsed_time
 		SCPS.iterations += 1
@@ -259,7 +261,7 @@ function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="IPOPT", 
 	iter_cap = SCPS.iterations + max_iter
 
 	while (SCPS.iterations <= iter_cap)
-		tic()
+		time_start = time_ns()
 		SCPS.solver_model = Model(solver=IpoptSolver(; kwarg...))
 		SCPV = SCPVariables{JuMP.Variable, Array{JuMP.Variable}}()
 		add_variables!(SCPS.solver_model, SCPV, SCPP)
@@ -275,7 +277,7 @@ function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="IPOPT", 
 		push!(SCPS.convergence_measure, convergence_metric(new_traj, SCPS.traj, SCPP))
 
 		SCPS.dual = get_dual_jump(SCPS, SCPP)
-		iter_elapsed_time = toq()
+		iter_elapsed_time = (time_ns()-time_start)/10^9
 		push!(SCPS.iter_elapsed_times, iter_elapsed_time)
 		SCPS.total_time += iter_elapsed_time
 		SCPS.iterations += 1

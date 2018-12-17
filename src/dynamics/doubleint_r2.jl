@@ -65,7 +65,7 @@ function init_traj_straightline(TOP::TrajectoryOptimizationProblem{PointMassInSp
   x_dim, u_dim, N, tf_guess = model.x_dim, model.u_dim, TOP.N, TOP.tf_guess
   N = TOP.N
 
-  X = hcat(linspace(x_init, x_goal, N)...)
+  X = hcat(range(x_init, stop=x_goal, length=N)...)
   U = zeros(u_dim, N)
   Trajectory(X, U, tf_guess)
 end
@@ -129,24 +129,24 @@ function update_f!(f, x::Vector, u::Vector, robot::Robot, model::DoubleIntR2)
 end
 
 function A_dyn(x::Vector, robot::Robot, model::DoubleIntR2)
-  kron([0 1; 0 0], eye(2))
+  kron([0 1; 0 0], Eye(2))
 end
 
 function B_dyn(x::Vector, robot::Robot, model::DoubleIntR2)
   B = zeros(4,2)
-  B[3:4,1:2] = eye(2)/robot.mass
+  B[3:4,1:2] = Eye(2)/robot.mass
   return B
 end
 
 # Generate full discrete update version of dynamics matrices for a time step
 # TODO(ambyld): Rename these? Initialize these once?
 function A_dyn_discrete(x, dt, robot::Robot, model::DoubleIntR2)
-  kron([1 dt; 0 1], eye(2))
+  kron([1 dt; 0 1], Eye(2))
 end
 
 function B_dyn_discrete(x, dt, robot::Robot, model::DoubleIntR2)
-  [0.5*dt^2*eye(2);
-   dt*eye(2)]/robot.mass
+  [0.5*dt^2*Eye(2);
+   dt*Eye(2)]/robot.mass
 end
 
 ## Convex state inequality constraints
