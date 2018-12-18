@@ -297,7 +297,7 @@ function add_variables!(solver_model::Model, SCPV::SCPVariables{JuMP.Variable}, 
 end
 
 function add_objective!(solver_model::Model, SCPV::SCPVariables, SCPP::SCPProblem{Car, DubinsCar, E}) where E
-	U = SCPV.U
+  U = SCPV.U
   N, dt = SCPP.N, SCPP.tf_guess/SCPP.N
 
   @NLobjective(solver_model, Min, sum(dt*U[i]^2 for i = 1:N-1))

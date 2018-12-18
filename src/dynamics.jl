@@ -16,6 +16,16 @@ macro constraint_abbrev(traj, traj_prev, SCPP)
     X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh
 	end
 end
+macro constraint_abbrev_jump(SCPV, traj_prev, SCPP)
+  quote
+    # Todo Thomas: put Tf as a function of the current trajectory, i.d. as a SCPV variable
+    X, U, Tf = $(esc(SCPV)).X, $(esc(SCPV)).U, $(esc(traj_prev)).Tf
+    Xp, Up, Tfp, dtp = $(esc(traj_prev)).X, $(esc(traj_prev)).U, $(esc(traj_prev)).Tf, $(esc(traj_prev)).dt
+    robot, model, WS, x_init, x_goal = $(esc(SCPP)).PD.robot, $(esc(SCPP)).PD.model, $(esc(SCPP)).WS, $(esc(SCPP)).PD.x_init, $(esc(SCPP)).PD.x_goal
+    x_dim, u_dim, N, dh = model.x_dim, model.u_dim, $(esc(SCPP)).N, $(esc(SCPP)).dh
+    X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh
+  end
+end
 
 # macro make_func(name, code)
 # 	quote
@@ -34,6 +44,16 @@ end
 
 function cse_goal_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem, k::Int, i::Int)
 	X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev(traj, traj_prev, SCPP)
+	X[i,N] - x_goal[i]
+end
+
+function cse_init_constraints_jump(SCPV, traj_prev::Trajectory, SCPP::SCPProblem, k::Int, i::Int)
+	X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_jump(SCPV, traj_prev, SCPP)
+	X[i,1] - x_init[i]
+end
+
+function cse_goal_constraints_jump(SCPV, traj_prev::Trajectory, SCPP::SCPProblem, k::Int, i::Int)
+	X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_jump(SCPV, traj_prev, SCPP)
 	X[i,N] - x_goal[i]
 end
 

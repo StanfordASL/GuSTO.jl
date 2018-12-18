@@ -161,6 +161,70 @@ function add_constraints_gusto_cvx(SCPV::SCPVariables, traj_prev::Trajectory, SC
 
 	return constraints
 end
+function add_constraints_gusto_jump!(solver_model::Model, SCPV::SCPVariables, traj_prev::Trajectory, SCPC::SCPConstraints, SCPP::SCPProblem)
+	constraints = Convex.Constraint[]
+
+	update_model_params!(SCPP, traj_prev)
+
+	for (f, k, i) in (SCPC.convex_state_eq..., SCPC.dynamics...)
+		if i == 0 # vector constraint
+	    	@constraint(solver_model, f(SCPV, traj_prev, SCPP, k, i) .== 0.)
+	    else 	  # scalar constraint
+	    	@constraint(solver_model, f(SCPV, traj_prev, SCPP, k, i)  == 0.)
+	    end
+	end
+
+	for (f, k, i) in SCPC.convex_control_ineq
+		@constraint(solver_model, f(SCPV, traj_prev, SCPP, k, i)  <= 0.)
+	end
+
+	# Final Time
+	if !SCPP.param.fixed_final_time
+		@constraint(solver_model, SCPV.Tf >= 0.1)
+	else
+		@constraint(solver_model, SCPV.Tf == SCPP.tf_guess)
+	end
+end
+
+function add_objective_gusto_jump!(solver_model::Model, SCPV::SCPVariables, traj_prev::Trajectory, SCPC::SCPConstraints, SCPP::SCPProblem)
+	robot, model = SCPP.PD.robot, SCPP.PD.model
+	x_dim, u_dim, N = model.x_dim, model.u_dim, SCPP.N
+
+	U = SCPV.U
+	N, dt = SCPP.N, SCPP.tf_guess/SCPP.N
+
+	# for i = 1:u_dim
+	# 	@NLobjective(solver_model, Min, sum(dt*U[i,k]^2 for k = 1:N-1))
+	# end
+
+	cost_full_convexified_gusto_jump(arg,asdf) = cost_full_convexified_gusto(arg, traj_prev, SCPC, SCPP)
+
+	function ∇f(g, x, y)
+		( cost_full_convexified_gusto_jump(x+1)-cost_full_convexified_gusto_jump(x) ) / 2
+	    g[1] = 2 * (x - 1)
+	    g[2] = 2 * (y - 2)
+	end
+
+#	JuMP.register(solver_model, :cost_full_convexified_gusto_jump, (N*x_dim+N*u_dim+1), cost_full_convexified_gusto_jump, autodiff=true)
+	#JuMP.register(solver_model, :cost_full_convexified_gusto_jump, (N*x_dim), cost_full_convexified_gusto_jump, autodiff=true)
+	JuMP.register(solver_model, :cost_full_convexified_gusto_jump, 2, cost_full_convexified_gusto_jump, ∇f)
+	#JuMP.register(solver_model, :cost_full_convexified_gusto(:, traj_prev, SCPC, SCPP), 1, cost_full_convexified_gusto, autodiff=true)
+#		JuMP.register(solver_model, :cost_full_convexified_gusto, (x_dim+u_dim+1), 
+#	#							([SCPV.X[i,k] for i=1:x_dim],[SCPV.U[i,k] for i=1:u_dim], SCPV.Tf)->cost_full_convexified_gusto(traj, traj_prev, SCPC, SCPP), 
+#								(SCPV.X[i,k] for i=1:x_dim)->cost_full_convexified_gusto(traj, traj_prev, SCPC, SCPP), 
+#								autodiff=true)
+
+#	JuMP.register(model, :my_f, 4, my_f, ∇f)
+#	JuMP.register(model, :outP1, 4, (x1,x2,x3,x4) -> outP(i,x1,x2,x3,x4), autodiff=true)
+#	    JuMP.setNLobjective(m, :Min, Expr(:call, :myf, [x[i] for i=1:n]...))
+
+#	@NLobjective(solver_model, Min, cost_full_convexified_gusto(SCPV, traj_prev, SCPC, SCPP))
+
+	@NLobjective(solver_model, Min, cost_full_convexified_gusto_jump(SCPV,1))
+	#@NLobjective(solver_model, Min, Expr(:call, :cost_full_convexified_gusto_jump, [SCPV.X[i,k] for i=1:x_dim for k=1:N]...))
+	#####JuMP.setNLobjective(solver_model, :Min, Expr(:call, :cost_full_convexified_gusto_jump, [SCPV.X[i,k] for i=1:x_dim for k=1:N]...))
+		
+end
 
 function cost_convex_penalty_gusto(traj, traj_prev::Trajectory, SCPC::SCPConstraints, SCPP::SCPProblem)
 	omega, Delta = SCPP.param.alg.omega_vec[end], SCPP.param.alg.Delta_vec[end]
@@ -235,36 +299,45 @@ end
 ########
 # IPOPT
 ########
-function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="IPOPT", max_iter=Inf, force=false; kwarg...)
-	# Solves a sequential convex programming problem using the JuMP interface
+function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="IPOPT", max_iter=50, force=false; kwarg...)
+	# Solves a sequential convex programming problem
 	# Inputs:
 	#		SCPS - SCP solution structure, including an initial trajectory
 	#		SCPP - SCP problem definition structure
 	#   max_iter - Set to enforce a maximum number of iterations (0 = unlimited)
-	#   force - Set true to force further refinement iterations despite convergence
-
-	# if solver == "IPOPT"
-	# 	chosen_solver = IpoptSolver(; kwarg...)
-	# end
-
+	#   force - Set true to force further refinement iterations despite convergence	
 	N = SCPP.N
-	param = SCPP.param
+	param, model = SCPP.param, SCPP.PD.model
 
-	iter_cap = SCPS.iterations + max_iter
-	param.alg = SCPParam_GuSTO(SCPP.PD.model)
-	omega0, omegamax, rho0, rho1 = param.alg.omega0, param.alg.omegamax, param.alg.rho0, param.alg.rho1
+	param.alg = SCPParam_GuSTO(model)
+	Delta0, omega0, omegamax, rho0, rho1 = param.alg.Delta0, param.alg.omega0, param.alg.omegamax, param.alg.rho0, param.alg.rho1
 	beta_succ, beta_fail, gamma_fail = param.alg.beta_succ, param.alg.beta_fail, param.alg.gamma_fail
 	Delta_vec, omega_vec, rho_vec = param.alg.Delta_vec, param.alg.omega_vec, param.alg.rho_vec
+	trust_region_satisfied_vec, convex_ineq_satisfied_vec = param.alg.trust_region_satisfied_vec, param.alg.convex_ineq_satisfied_vec
+
 
 	iter_cap = SCPS.iterations + max_iter
+	#SCPV = SCPVariables{Convex.Variable,Convex.Variable}(SCPP)
+	SCPC = SCPConstraints(SCPP)
 
-	while (SCPS.iterations <= iter_cap)
+	initialize_model_params!(SCPP, SCPS.traj)
+	push!(SCPS.J_true, cost_true(SCPS.traj, SCPS.traj, SCPP))
+	push!(rho_vec, trust_region_ratio_gusto(SCPS.traj, SCPS.traj, SCPP))
+	param.obstacle_toggle_distance = Delta_vec[end]/8 + model.clearance # TODO: Generalize clearance
+
+	first_time = true
+	while (SCPS.iterations < iter_cap)
 		tic()
+
+
+		# Set up, solve problem
 		SCPS.solver_model = Model(solver=IpoptSolver(; kwarg...))
 		SCPV = SCPVariables{JuMP.Variable, Array{JuMP.Variable}}()
 		add_variables!(SCPS.solver_model, SCPV, SCPP)
-		add_objective!(SCPS.solver_model, SCPV, SCPP)
-		add_constraints!(SCPS.solver_model, SCPV, SCPS.traj, SCPP)
+		#add_objective!(SCPS.solver_model, SCPV, SCPP)
+		add_objective_gusto_jump!(SCPS.solver_model, SCPV, SCPS.traj, SCPC, SCPP)
+		#add_constraints!(SCPS.solver_model, SCPV, SCPS.traj, SCPP)
+		add_constraints_gusto_jump!(SCPS.solver_model, SCPV, SCPS.traj, SCPC, SCPP)
 		
 		setvalue.(SCPV.X, SCPS.traj.X)
 		setvalue.(SCPV.U, SCPS.traj.U)
@@ -275,17 +348,217 @@ function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="IPOPT", 
 		push!(SCPS.convergence_measure, convergence_metric(new_traj, SCPS.traj, SCPP))
 
 		SCPS.dual = get_dual_jump(SCPS, SCPP)
+
+
+		# update_model_params!(SCPP, SCPS.traj)
+		# prob.objective = cost_full_convexified_gusto(SCPV, SCPS.traj, SCPC, SCPP)
+		# prob.constraints = add_constraints_gusto_cvx(SCPV, SCPS.traj, SCPC, SCPP)
+		# Convex.solve!(prob, warmstart=!first_time)
+		first_time = false
+
+		@show get_status_jump(SCPS, SCPP)
+		push!(SCPS.prob_status, get_status_jump(SCPS, SCPP))
+		if SCPS.prob_status[end] != :Optimal
+		  warn("GuSTO SCP iteration failed to find an optimal solution")
+		  push!(SCPS.iter_elapsed_times,toq()) 
+		  return
+		end
+
+		# Recover solution
+		# new_traj = Trajectory(SCPV.X.value, SCPV.U.value, SCPV.Tf.value[1])
+		# push!(SCPS.convergence_measure, convergence_metric(new_traj, SCPS.traj, SCPP))
+		# push!(SCPS.J_full, prob.optval)
+		# SCPS.dual = get_dual_cvx(prob, SCPP, solver)
+		
+		# Check trust regions
+		push!(trust_region_satisfied_vec, trust_region_satisfied_gusto(new_traj, SCPS.traj, SCPP))
+		push!(convex_ineq_satisfied_vec, convex_ineq_satisfied_gusto(new_traj, SCPS.traj, SCPC, SCPP))
+
+		if trust_region_satisfied_vec[end]
+			push!(rho_vec, trust_region_ratio_gusto(new_traj, SCPS.traj, SCPP))			
+			if rho_vec[end] > rho1
+				push!(SCPS.accept_solution, false)
+				push!(Delta_vec, beta_fail*Delta_vec[end])
+				push!(omega_vec, omega_vec[end])
+			else
+				push!(SCPS.accept_solution, true)
+				rho_vec[end] < rho0 ? push!(Delta_vec, min(beta_succ*Delta_vec[end], Delta0)) : push!(Delta_vec, Delta_vec[end])
+				!convex_ineq_satisfied_vec[end] ? push!(omega_vec, gamma_fail*omega_vec[end]) : push!(omega_vec, omega0)
+			end
+		else
+			push!(SCPS.accept_solution, false)
+			push!(Delta_vec, Delta_vec[end])
+			push!(omega_vec, gamma_fail*omega_vec[end])
+		end
+
+		if SCPS.accept_solution[end]
+			push!(SCPS.J_true, cost_true(new_traj, SCPS.traj, SCPP))
+			copy!(SCPS.traj, new_traj)	# TODO(ambyld): Maybe deepcopy not needed?
+		else
+			push!(SCPS.J_true, SCPS.J_true[end])
+		end
+
+		param.obstacle_toggle_distance = Delta_vec[end]/8 + model.clearance
+
 		iter_elapsed_time = toq()
 		push!(SCPS.iter_elapsed_times, iter_elapsed_time)
 		SCPS.total_time += iter_elapsed_time
 		SCPS.iterations += 1
 
-		push!(SCPS.J_true, cost_true(new_traj, SCPS.traj, SCPP))
-		copy!(SCPS.traj, new_traj)
+		if omega_vec[end] > omegamax
+			warn("GuSTO SCP omegamax exceeded")
+			break
+		end
+		!SCPS.accept_solution[end] ? continue : nothing
 
 		if SCPS.convergence_measure[end] <= param.convergence_threshold
 			SCPS.converged = true
+			convex_ineq_satisfied_vec[end] && (SCPS.successful = true)
 			force ? continue : break
 		end
-	end
+
+	end # end while loop
+
+
 end
+
+
+
+
+#	function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="IPOPT", max_iter=50, force=false; kwarg...)
+#		# Solves a sequential convex programming problem using the JuMP interface
+#		# Inputs:
+#		#		SCPS - SCP solution structure, including an initial trajectory
+#		#		SCPP - SCP problem definition structure
+#		#   max_iter - Set to enforce a maximum number of iterations (0 = unlimited)
+#		#   force - Set true to force further refinement iterations despite convergence
+#	
+#		# if solver == "IPOPT"
+#		# 	chosen_solver = IpoptSolver(; kwarg...)
+#		# end
+#	
+#		N = SCPP.N
+#		param = SCPP.param
+#	
+#		iter_cap = SCPS.iterations + max_iter
+#		param.alg = SCPParam_GuSTO(SCPP.PD.model)
+#		Delta0, omega0, omegamax, rho0, rho1 = param.alg.Delta0, param.alg.omega0, param.alg.omegamax, param.alg.rho0, param.alg.rho1
+#		beta_succ, beta_fail, gamma_fail = param.alg.beta_succ, param.alg.beta_fail, param.alg.gamma_fail
+#		Delta_vec, omega_vec, rho_vec = param.alg.Delta_vec, param.alg.omega_vec, param.alg.rho_vec
+#	  	trust_region_satisfied_vec, convex_ineq_satisfied_vec = param.alg.trust_region_satisfied_vec, param.alg.convex_ineq_satisfied_vec
+#	
+#		initialize_model_params!(SCPP, SCPS.traj)
+#	
+#		iter_cap = SCPS.iterations + max_iter
+#	
+#		#SCPV = SCPVariables{Convex.Variable,Convex.Variable}(SCPP)
+#		#SCPC = SCPConstraints(SCPP)
+#	
+#		#initialize_model_params!(SCPP, SCPS.traj)
+#	  	#push!(SCPS.J_true, cost_true(SCPS.traj, SCPS.traj, SCPP))
+#		#push!(rho_vec, trust_region_ratio_gusto(SCPS.traj, SCPS.traj, SCPP))
+#		param.obstacle_toggle_distance = Delta_vec[end]/8 + model.clearance # TODO: Generalize clearance
+#	
+#	
+#		while (SCPS.iterations <= iter_cap)
+#			tic()
+#			update_model_params!(SCPP, SCPS.traj)
+#	
+#			SCPS.solver_model = Model(solver=IpoptSolver(; kwarg...))
+#			SCPV = SCPVariables{JuMP.Variable, Array{JuMP.Variable}}()
+#			add_variables!(SCPS.solver_model, SCPV, SCPP)
+#			add_objective!(SCPS.solver_model, SCPV, SCPP)
+#			add_constraints!(SCPS.solver_model, SCPV, SCPS.traj, SCPP)
+#			
+#			setvalue.(SCPV.X, SCPS.traj.X)
+#			setvalue.(SCPV.U, SCPS.traj.U)
+#			
+#			JuMP.solve(SCPS.solver_model)
+#	
+#			new_traj = Trajectory(getvalue(SCPV.X), getvalue(SCPV.U), SCPS.traj.Tf)
+#			push!(SCPS.convergence_measure, convergence_metric(new_traj, SCPS.traj, SCPP))
+#	
+#			SCPS.dual = get_dual_jump(SCPS, SCPP)
+#			#iter_elapsed_time = toq()
+#			#push!(SCPS.iter_elapsed_times, iter_elapsed_time)
+#			#SCPS.total_time += iter_elapsed_time
+#			#SCPS.iterations += 1
+#	
+#			# push!(SCPS.J_true, cost_true(new_traj, SCPS.traj, SCPP))
+#			# copy!(SCPS.traj, new_traj)
+#	
+#	
+#	
+#	# ----
+#			# TODO THOMAS
+#			# Work-around right now for trust region computation
+#			#prob.constraints = add_constraints_gusto_cvx(SCPV, SCPS.traj, SCPC, SCPP)
+#	
+#			#push!(SCPS.prob_status, prob.status)
+#		    #if prob.status != :Optimal
+#		    #  warn("GuSTO SCP iteration failed to find an optimal solution")
+#		    #  push!(SCPS.iter_elapsed_times,toq()) 
+#		    #  return
+#		    #end
+#			## Recover solution
+#			#new_traj = Trajectory(SCPV.X.value, SCPV.U.value, SCPV.Tf.value[1])
+#			#push!(SCPS.convergence_measure, convergence_metric(new_traj, SCPS.traj, SCPP))
+#			#push!(SCPS.J_full, prob.optval)
+#			#SCPS.dual = get_dual_cvx(prob, SCPP, solver)
+#			
+#			# Check trust regions
+#			push!(trust_region_satisfied_vec, trust_region_satisfied_gusto(new_traj, SCPS.traj, SCPP))
+#			push!(convex_ineq_satisfied_vec, convex_ineq_satisfied_gusto(new_traj, SCPS.traj, SCPC, SCPP))
+#	
+#	    	if trust_region_satisfied_vec[end]
+#	    		push!(rho_vec, trust_region_ratio_gusto(new_traj, SCPS.traj, SCPP))			
+#				if rho_vec[end] > rho1
+#					push!(SCPS.accept_solution, false)
+#					push!(Delta_vec, beta_fail*Delta_vec[end])
+#					push!(omega_vec, omega_vec[end])
+#				else
+#					push!(SCPS.accept_solution, true)
+#					rho_vec[end] < rho0 ? push!(Delta_vec, min(beta_succ*Delta_vec[end], Delta0)) : push!(Delta_vec, Delta_vec[end])
+#					!convex_ineq_satisfied_vec[end] ? push!(omega_vec, gamma_fail*omega_vec[end]) : push!(omega_vec, omega0)
+#				end
+#			else
+#				push!(SCPS.accept_solution, false)
+#				push!(Delta_vec, Delta_vec[end])
+#				push!(omega_vec, gamma_fail*omega_vec[end])
+#			end
+#	
+#			if SCPS.accept_solution[end]
+#				push!(SCPS.J_true, cost_true(new_traj, SCPS.traj, SCPP))
+#				copy!(SCPS.traj, new_traj)	# TODO(ambyld): Maybe deepcopy not needed?
+#			else
+#				push!(SCPS.J_true, SCPS.J_true[end])
+#			end
+#			param.obstacle_toggle_distance = Delta_vec[end]/8 + model.clearance
+#	
+#			iter_elapsed_time = toq()
+#			push!(SCPS.iter_elapsed_times, iter_elapsed_time)
+#			SCPS.total_time += iter_elapsed_time
+#			SCPS.iterations += 1
+#	
+#			if omega_vec[end] > omegamax
+#				warn("GuSTO SCP omegamax exceeded")
+#				break
+#			end
+#			!SCPS.accept_solution[end] ? continue : nothing
+#	
+#			#if SCPS.convergence_measure[end] <= param.convergence_threshold
+#			#	SCPS.converged = true
+#			#	convex_ineq_satisfied_vec[end] && (SCPS.successful = true)
+#			#	force ? continue : break
+#			#end
+#		#end
+#	
+#	
+#	# ----
+#	
+#			if SCPS.convergence_measure[end] <= param.convergence_threshold
+#				SCPS.converged = true
+#				force ? continue : break
+#			end
+#		end
+#	end
