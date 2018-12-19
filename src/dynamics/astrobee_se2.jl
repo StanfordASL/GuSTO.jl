@@ -90,7 +90,7 @@ function init_traj_straightline(TOP::TrajectoryOptimizationProblem{Astrobee2D{T}
   x_dim, u_dim, N, tf_guess = model.x_dim, model.u_dim, TOP.N, TOP.tf_guess
   N = TOP.N
 
-  X = hcat(linspace(x_init, x_goal, N)...)
+  X = hcat(range(x_init, stop=x_goal, length=N)...)
   U = zeros(u_dim, N)
   Trajectory(X, U, tf_guess)
 end
@@ -116,7 +116,7 @@ function initialize_model_params!(SCPP::SCPProblem{Astrobee2D{T}, AstrobeeSE2, E
   SCPP.PD.robot.Jcollision = []
   Jcollision = SCPP.PD.robot.Jcollision
   for k = 1:N
-    push!(Jcollision, [eye(2) zeros(2,1); zeros(1,3)])
+    push!(Jcollision, [Eye(2) zeros(2,1); zeros(1,3)])
   end
 end
 
@@ -182,12 +182,12 @@ function update_f!(f, x::Vector, u::Vector, robot::Robot, model::AstrobeeSE2)
 end
 
 function A_dyn(x::Vector, robot::Robot, model::AstrobeeSE2)
-  kron([0 1; 0 0], eye(3))
+  kron([0 1; 0 0], Eye(3))
 end
 
 function B_dyn(x::Vector, robot::Robot, model::AstrobeeSE2)
   B = zeros(6,3)
-  B[1:6,1:3] = kron([0;1], eye(3))
+  B[1:6,1:3] = kron([0;1], Eye(3))
   B[4:5,:] = 1/robot.mass * B[4:5,:]
   B[6,:] = robot.Jinv * B[6,:]
   return B
@@ -196,12 +196,12 @@ end
 # Generate full discrete update version of dynamics matrices for a time step
 # TODO(ambyld): Rename these? Initialize these once?
 function A_dyn_discrete(x, dt, robot::Robot, model::AstrobeeSE2)
-  kron([1 dt; 0 1], eye(3))
+  kron([1 dt; 0 1], Eye(3))
 end
 
 function B_dyn_discrete(x, dt, robot::Robot, model::AstrobeeSE2)
   Jzz_inv = robot.Jinv
-  B = [0.5*dt^2*eye(3); dt*eye(3)]
+  B = [0.5*dt^2*Eye(3); dt*Eye(3)]
   B[1:2,:] *= 1/robot.mass  # translational force -> acceleration
   B[4:5,:] *= 1/robot.mass
   B[3,:] *= Jzz_inv      # rotational moment -> acceleration

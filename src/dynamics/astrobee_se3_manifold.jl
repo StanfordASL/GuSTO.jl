@@ -105,7 +105,7 @@ function init_traj_straightline(TOP::TrajectoryOptimizationProblem{Astrobee3D{T}
   x_dim, u_dim, N, tf_guess = model.x_dim, model.u_dim, TOP.N, TOP.tf_guess
   N = TOP.N
 
-  X = hcat(linspace(x_init, x_goal, N)...)
+  X = hcat(linspace(x_init, stop=x_goal, length=N)...)
   U = zeros(u_dim, N)
   Trajectory(X, U, tf_guess)
 end
@@ -229,7 +229,7 @@ end
 function A_dyn(x::Vector, robot::Robot, model::AstrobeeSE3Manifold)
   x_dim = model.x_dim
   A = zeros(x_dim, x_dim)
-  A[1:6,1:6] = kron([0 1; 0 0], eye(3))
+  A[1:6,1:6] = kron([0 1; 0 0], Eye(3))
   update_A!(A, x, robot, model)
   return A
 end
@@ -279,7 +279,7 @@ end
 function B_dyn(x::Vector, robot::Robot, model::AstrobeeSE3Manifold)
   x_dim, u_dim = model.x_dim, model.u_dim
   B = zeros(x_dim, u_dim)
-  B[1:6,1:3] = 1/robot.mass*kron([0;1], eye(3))
+  B[1:6,1:3] = 1/robot.mass*kron([0;1], Eye(3))
   B[11:13,4:6] = robot.Jinv   # SO(3)
   return B
 end
@@ -631,7 +631,6 @@ function interpolate_traj(traj::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, Astr
   for k in 1:N-1
     istart = Nstep*(k-1)+1
     Ufull[:, istart:Nstep*k] = repmat(U[:,k], 1, Nstep)
-    # Ufull[:, istart:Nstep*k+1] = collect(linspace()
 
     Xfull[:,istart] = X[:,k]
     Ustep = Ufull[:,istart]

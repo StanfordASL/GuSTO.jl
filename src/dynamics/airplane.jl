@@ -172,11 +172,11 @@ function init_traj_straightline(TOP::TrajectoryOptimizationProblem{Plane{T}, Air
 	model, x_init, x_goal = TOP.PD.model, TOP.PD.x_init, TOP.PD.x_goal
 	x_dim, u_dim, N, tf_guess = model.x_dim, model.u_dim, TOP.N, TOP.tf_guess
 
-	X = hcat(linspace(x_init, x_goal, N)...)
+	X = hcat(range(x_init, stop=x_goal, length=N)...)
 	U = zeros(u_dim,N)
 
   for k in 1:3
-    X[k,:] = collect(linspace(X[k,1], X[k,end],N))
+    X[k,:] = collect(range(X[k,1], stop=X[k,end], length=N))
   end
   for k in 4:8
     X[k,:] = X[k,1]*ones(N)
@@ -199,7 +199,7 @@ function init_traj_feasible_sos(TOP::TrajectoryOptimizationProblem{Plane{T}, Air
   end
 
   # downsample
-  idx = [round(Int,i) for i in collect(linspace(1,Nidx,N))]
+  idx = [round(Int,i) for i in collect(range(1, stop=Nidx, length=N))]
   return Trajectory(Xfull[:,idx],Ufull[:,idx[1:end-1]],tf_guess)
 end
 
@@ -218,7 +218,7 @@ function init_traj_line_sos(TOP::TrajectoryOptimizationProblem{Plane{T}, Airplan
   end
 
   # downsample
-  idx = [round(Int,i) for i in collect(linspace(1,Nidx,N))]
+  idx = [round(Int,i) for i in collect(range(1, stop=Nidx, length=N))]
   Xfull = Xfull[:,idx]
   Ufull = Ufull[:,idx[1:end-1]]
 

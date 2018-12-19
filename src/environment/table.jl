@@ -7,6 +7,7 @@ mutable struct Table{T<:AbstractFloat} <: Environment
   keepout_zones::Vector
   obstacle_set::Vector
 end
+
 function Table{T}(room::Symbol=:ames) where T
   # 2D granite table
 
@@ -14,18 +15,25 @@ function Table{T}(room::Symbol=:ames) where T
     # NASA Ames table (from Andrew Symington)
     # CoM coordinates + robot radius
     radius = 0.15*sqrt(2)
-    worldAABBmin, worldAABBmax = [-0.5,-0.75,0.]-radius, [0.75,0.75,0.001]+radius
+    worldAABBmin, worldAABBmax = [-0.5,-0.75,0.] .- radius, [0.75,0.75,0.001] .+ radius
   else room == :stanford
     # Durand 010 table
     ft2m = 0.3048
     worldAABBmin, worldAABBmax = [0.,0.,0.], [12.,9.,0.001]*ft2m
   end
  
-  keepin_zones = Vector{HyperRectangle}(0)
+  return Table(worldAABBmin, worldAABBmax)
+end
+Table(room::Symbol=:ames,::Type{T} = Float64; kwargs...) where {T} = Table{T}(room; kwargs...)
+
+function Table(worldAABBmin::AbstractArray{T}, worldAABBmax::AbstractArray{T}) where T
+  keepin_zones = Vector{HyperRectangle}(undef, 0)
+  (length(worldAABBmin) == 2) ? push!(worldAABBmin, T(-1)) : nothing
+  (length(worldAABBmax) == 2) ? push!(worldAABBmax, T(1)) : nothing
   push!(keepin_zones, HyperRectangle(worldAABBmin..., (worldAABBmax-worldAABBmin)...))
 
   # Add obstacles surrounding table
-  keepout_zones = Vector{GeometryTypes.GeometryPrimitive}(0)
+  keepout_zones = Vector{GeometryTypes.GeometryPrimitive}(undef, 0)
   koz_min = []
   koz_max = []
   a = 10.  # keep-out zone size (should be larger than 1.05)
@@ -41,9 +49,7 @@ function Table{T}(room::Symbol=:ames) where T
   for i in 1:length(koz_min)
     push!(keepout_zones, HyperRectangle(koz_min[i]..., (koz_max[i]-koz_min[i])...))
   end
-  obstacle_set = Vector{GeometryTypes.GeometryPrimitive}(0)
+  obstacle_set = Vector{GeometryTypes.GeometryPrimitive}(undef, 0)
 
-  return Table{T}(worldAABBmin,worldAABBmax,
-    keepin_zones,keepout_zones,obstacle_set)
+  return Table{T}(worldAABBmin, worldAABBmax, keepin_zones, keepout_zones, obstacle_set)
 end
-Table(room=:ames,::Type{T} = Float64; kwargs...) where {T} = Table{T}(room; kwargs...)

@@ -9,21 +9,21 @@
 # A General Construction Scheme for Unit Quaternion Curves with Simple High Order Derivatives; Kim et al. 1995
 # Modified Rodrigues Parameters: An Efficient Representation of Orientation in 3D VIsion and Graphics; Terzakis et al. 2018
 
-function skew{T}(v::Vector{T})
+function skew(v::Vector{T}) where T
   # generates 3x3 skew symmetric matrix for vector
   return [0     -v[3]   v[2];
           v[3]   0      -v[1];
          -v[2]   v[1]   0]
 end
 
-function dcm2angle{T}(dcm::Matrix{T})
+function dcm2angle(dcm::Matrix{T}) where T
   # 1.3.2.2 on p21 in Spacecraft Dynamics and Control by Anton de Ruiter
   # Eq. 102 in Shuster
   return acos(0.5*(trace(dcm) - 1))
 end
 
 
-function dcm2vec{T}(dcm::Matrix{T})
+function dcm2vec(dcm::Matrix{T}) where T
   # 1.3.2.2 on p21 in Spacecraft Dynamics and Control by Anton de Ruiter
   # Eq. 103a in Shuster
   phi = dcm2angle(dcm)
@@ -57,7 +57,7 @@ function dcm2vec{T}(dcm::Matrix{T})
 end
 
 
-function dcm2quat{T}(dcm::Matrix{T}, canonicalize::Bool=false)
+function dcm2quat(dcm::Matrix{T}, canonicalize::Bool=false) where T
   # canonicalize: true corresponds to positive scalar component q for dual representation
   # Eq. 163-168 in Shuster
 
@@ -69,24 +69,24 @@ function dcm2quat{T}(dcm::Matrix{T}, canonicalize::Bool=false)
 end
 
 
-function dcm2mrp{T}(dcm::Matrix{T}, canonicalize::Bool=false)
+function dcm2mrp(dcm::Matrix{T}, canonicalize::Bool=false) where T
   return quat2mrp(dcm2quat(dcm, canonicalize))
 end
 
 
-function vec2quat{T}(axis::Vector{T}, phi::T, canonicalize::Bool=false)
+function vec2quat(axis::Vector{T}, phi::T, canonicalize::Bool=false) where T
   q = [sin(0.5*phi)*axis/norm(axis); cos(0.5*phi)]
   q = canonicalize ? sign(q[4])*q./norm(q) : q./norm(q)
   return q
 end
 
 
-function quat2angle{T}(q::Vector{T})
+function quat2angle(q::Vector{T}) where T
   return 2*atan2(norm(q[1:3]), q[4])
 end
 
 
-function quat2vec{T}(q::Vector{T}, canonicalize::Bool=false)
+function quat2vec(q::Vector{T}, canonicalize::Bool=false) where T
   # canonicalize: true corresponds to positive scalar component q for dual representation
   if norm(q[1:3])^2 < 0.00001
     return zeros(T,3)
@@ -97,7 +97,7 @@ function quat2vec{T}(q::Vector{T}, canonicalize::Bool=false)
 end
 
 
-function quat2dcm{T}(q::Vector{T}, attitude_convention::String="orientation")
+function quat2dcm(q::Vector{T}, attitude_convention::String="orientation") where T
   # Eq. 97 in Shuster (note sin term sign flipped based on skew matrix convention)
   # Eq. 1.26 on p20 in Spacecraft Dynamics and Control by Anton de Ruiter
   phi = quat2angle(q)
@@ -113,20 +113,20 @@ function quat2dcm{T}(q::Vector{T}, attitude_convention::String="orientation")
 end
 
 
-function vec2dcm{T}(e::Vector{T}, phi::T)
+function vec2dcm(e::Vector{T}, phi::T) where T
   q = vec2quat(e, phi)
   return quat2dcm(q)
 end
 
 
-function quat_derivative{T}(q::Vector{T}, w::Vector{T})
+function quat_derivative(q::Vector{T}, w::Vector{T}) where T
   # Eq. 305 in Shuster
   omega_skew = [-skew(w) w; -w' 0]
   return 0.5*omega_skew*q
 end
 
 
-function quat_multiply{T}(q1::Vector{T}, q2::Vector{T})
+function quat_multiply(q1::Vector{T}, q2::Vector{T}) where T
   # Eq. 169-171 in Shuster
   # q1 * q2 <==> R(q1) * R(q2)
 
@@ -137,7 +137,7 @@ function quat_multiply{T}(q1::Vector{T}, q2::Vector{T})
 end
 
 
-function quat_inv{T}(q::Vector{T})
+function quat_inv(q::Vector{T}) where T
   # Eq. 177 in Shuster
   qinv = copy(q)
   qinv[1:3]*=-1
@@ -145,7 +145,7 @@ function quat_inv{T}(q::Vector{T})
 end
 
 
-function quat_error{T}(q1::Vector{T}, q2::Vector{T})
+function quat_error(q1::Vector{T}, q2::Vector{T}) where T
   # corresponds to  q2 = quat_multiply(dq,q1)
   # quat_multiply(q2, quat_inv(q1))
   
@@ -160,7 +160,7 @@ function quat_error{T}(q1::Vector{T}, q2::Vector{T})
 end
 
 
-function quat_rotate{T}(q::Vector{T}, v::Vector{T}, attitude_convention::String="orientation")
+function quat_rotate(q::Vector{T}, v::Vector{T}, attitude_convention::String="orientation") where T
   # Eq. 183 in Shuster
   # v: 3 element vector to be rotated
 
@@ -176,7 +176,7 @@ function quat_rotate{T}(q::Vector{T}, v::Vector{T}, attitude_convention::String=
 end
 
 
-function quat_interp{T}(q0::Vector{T}, q1::Vector{T}, t::T)
+function quat_interp(q0::Vector{T}, q1::Vector{T}, t::T) where T
   # p371 in "A General Construction Scheme for Unit Quaternion Curves with Simple High Order Derivatives"
   # NOTE: q1 * q2 <==> R(q1) * R(q2)
 
@@ -190,7 +190,7 @@ function quat_interp{T}(q0::Vector{T}, q1::Vector{T}, t::T)
 end
 
 
-function quat_exp{T}(v::Vector{T})
+function quat_exp(v::Vector{T}) where T
   # gives quaternion q corresponding to orientation obtained
   # from an initial orientation [0 0 0 1] by rotating of an angle norm(v)
   # around fixed direction v/norm(v)
@@ -203,7 +203,7 @@ function quat_exp{T}(v::Vector{T})
 end
 
 
-function quat_log{T}(q::Vector{T})
+function quat_log(q::Vector{T}) where T
   # gives vector having direction of the Euler's axis and magnitude equal
   # to Euler's angle of the orientation from [0 0 0 1] to q
   # Eq. 9 in "Time-Optimal Reorientation of a Spacecraft Using an Inverse Dynamics Optimization Method"
@@ -215,7 +215,7 @@ function quat_log{T}(q::Vector{T})
 end
 
 
-function quat2mrp{T}(q::Vector{T})
+function quat2mrp(q::Vector{T}) where T
   # Eq. 249 in Shuster
   # Eq. 22 in Terzakis et al.
   if abs(q[4]+1) < 0.000001
@@ -226,7 +226,7 @@ function quat2mrp{T}(q::Vector{T})
 end
 
 
-function mrp2quat{T}(p::Vector{T})
+function mrp2quat(p::Vector{T}) where T
   # Eq. 25 & 26 in Terzakis et al.
   s = (1-norm(p)^2)/(1+norm(p)^2)
   v = 2*p/(1+norm(p)^2)
@@ -234,7 +234,7 @@ function mrp2quat{T}(p::Vector{T})
 end
 
 
-function mrp2dcm{T}(p::Vector{T}, attitude_convention::String="orientation")
+function mrp2dcm(p::Vector{T}, attitude_convention::String="orientation") where T
   # Eq. 255b in Shuster
   # NOTE (6/26): switched +4 term to -4 term because that's what I
   # found everywhere else and unit tests pass with this only
@@ -250,13 +250,13 @@ function mrp2dcm{T}(p::Vector{T}, attitude_convention::String="orientation")
 end
 
 
-function mrp_derivative{T}(p::Vector{T}, w::Vector{T})
+function mrp_derivative(p::Vector{T}, w::Vector{T}) where T
   # Eq. 338 in Shuster (in terms of the body-referenced angular velocity)
   return 0.25*((1-norm(p)^2)*w - 2*cross(w,p) + 2*dot(w,p)*p)
 end
 
 
-function mrp_multiply{T}(p1::Vector{T}, p2::Vector{T})
+function mrp_multiply(p1::Vector{T}, p2::Vector{T}) where T
   # Eq. 257 in Shuster
   # p1 * p2 <==> R(p1) * R(p2)
   # TODO(acauligi): check if denominator is close to 0. for edge case
@@ -265,7 +265,7 @@ function mrp_multiply{T}(p1::Vector{T}, p2::Vector{T})
     (1+norm(p1)^2*norm(p2)^2 - 2*dot(p1,p2))
 end
 
-# function Aq{T}(J::Matrix{T},X::Vector{T})
+# function Aq(J::Matrix{T},X::Vector{T})
 #   Jxx,Jyy,Jzz = diag(J)
 #   qx,qy,qz,qw = X[1:4]
 #   wx,wy,wz = X[5:7]
@@ -279,7 +279,7 @@ end
 #   return [Jq;Jw]  
 # end
 
-# function Apb{T}(J::Matrix{T},X::Vector{T})
+# function Apb(J::Matrix{T},X::Vector{T})
 #   Jxx,Jyy,Jzz = diag(J)
 #   px,py,pz = X[1:3]
 #   wx,wy,wz = X[4:6]
@@ -292,7 +292,7 @@ end
 #   return [Jpb;Jw]
 # end
 
-# function Api{T}(J::Matrix{T},X::Vector{T})
+# function Api(J::Matrix{T},X::Vector{T})
 #   Jxx,Jyy,Jzz = diag(J)
 #   px,py,pz = X[1:3]
 #   wx,wy,wz = X[4:6]
@@ -306,7 +306,7 @@ end
 # end
 
 
-# function B{T}(J::Matrix{T},X::Vector{T})
+# function B(J::Matrix{T},X::Vector{T})
 #   Jxx,Jyy,Jzz = diag(J)
 #   Bw = length(X) == 6 ? zeros(T,6,3) : zeros(T,7,3)
 #   Bw[end-2:end,:] = diagm([1/Jxx,1/Jyy,1/Jzz])
@@ -331,7 +331,7 @@ end
 # end
 
 
-# function quat2rpy{T}(q::Vector{T})
+# function quat2rpy(q::Vector{T})
 #   sinr = 2*(q[4]*q[1] + q[2]*q[3]) 
 #   cosr = 1 - 2*(q[1]*q[1] + q[2]*q[2])
 #   roll = atan2(sinr, cosr)
@@ -379,7 +379,7 @@ end
 # end
 
 
-function plot_vector_rotation{T}(Qs::Matrix{T}, v::Matrix{T}=eye(T,3))
+function plot_vector_rotation(Qs::Matrix{T}, v::Matrix{T}=eye(T,3)) where T
   # Qs: 4xN matrix of quaternions 
   # v: 3xN vectors to be plotted; defaults to body frame
 

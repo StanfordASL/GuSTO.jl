@@ -83,7 +83,7 @@ function init_traj_straightline(TOP::TrajectoryOptimizationProblem{Car, DubinsCa
 	model, x_init, x_goal = TOP.PD.model, TOP.PD.x_init, TOP.PD.x_goal
 	x_dim, u_dim, N, tf_guess = model.x_dim, model.u_dim, TOP.N, TOP.tf_guess
 
-	X = hcat(linspace(x_init, x_goal, N)...)
+	X = hcat(range(x_init, stop=x_goal, length=N)...)
 	U = zeros(u_dim,N)
 	Trajectory(X, U, tf_guess)
 end

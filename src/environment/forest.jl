@@ -1,3 +1,5 @@
+export Forest
+
 mutable struct Forest{T<:AbstractFloat} <: Environment
   worldAABBmin::Vector{T}
   worldAABBmax::Vector{T}
