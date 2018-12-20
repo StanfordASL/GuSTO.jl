@@ -1,9 +1,9 @@
-# __precompile__()
+# __precompile__(false)
 module GuSTO
 
 using BulletCollision
 
-using PyPlot
+using Plots
 using RigidBodySim, RigidBodyDynamics
 using MeshCat, MeshCatMechanisms
 using CoordinateTransformations
@@ -18,9 +18,10 @@ import ColorTypes: RGB, RGBA
 
 using StaticArrays
 using StaticArrays.FixedSizeArrays
-using JuMP, Ipopt, MathProgBase
-using Convex, Gurobi, Mosek, SCS
-
+using JuMP, Convex
+using Ipopt, Mosek, SCS
+# using Gurobi
+using MathProgBase, MathOptInterface
 using NLsolve, DifferentialEquations
 
 using MAT

@@ -51,8 +51,8 @@ function PandaBot{T}() where T
   r = sqrt(3)*0.5*0.305   # inflate to sphere
   # hard_limit_vel = 0.5 
   # hard_limit_accel = 0.1 
-  # hard_limit_omega = 45*pi/180 
-  # hard_limit_alpha = 50*pi/180 
+  # hard_limit_omega = 45*π/180 
+  # hard_limit_alpha = 50*π/180 
   # J = 0.1083*Eye(3) 
   # Jinv = inv(J)
   btCollisionObject = BT.sphere(SVector{3}(zeros(T,3)), r) # Update this
@@ -81,7 +81,7 @@ function PandaBot{T}() where T
   EE_link_radius = 0.02
   EE_path = RigidBodyDynamics.path(pan.mechanism, root_body(pan.mechanism),EE_link)
      # Get limits
-    q0 = [0.0;0.0;0.0;0.0;0.0;pi;0.0;0.0;0.0]
+    q0 = [0.0;0.0;0.0;0.0;0.0;π;0.0;0.0;0.0]
     set_configuration!(state,q0)
     lims_up = RigidBodyDynamics.transform(state, EE_link_point, world_frame)
   EE_point3d_inWorldframe_limit_min, EE_point3d_inWorldframe_limit_max = -maximum(lims_up.v)*ones(3), maximum(lims_up.v)*ones(3)

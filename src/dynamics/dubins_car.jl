@@ -24,7 +24,7 @@ function DubinsCar()
 	u_dim = 1
 	v = 2.
 	k = 1.
-	x_max = [100., 100., 2*pi]
+	x_max = [100., 100., 2*π]
 	x_min = -x_max
 	u_max = 10.
 	u_min = -u_max
@@ -39,17 +39,17 @@ function SCPParam(model::DubinsCar, fixed_final_time::Bool)
 end
 
 function SCPParam_GuSTO(model::DubinsCar)
-  Delta0 = 10000.
-  omega0 = 1.
-  omegamax = 1.0e10
-  epsilon = 1.0e-6
-  rho0 = 0.4
-  rho1 = 1.5 
-  beta_succ = 2.
-  beta_fail = 0.5
-  gamma_fail = 5.
+  Δ0 = 10000.
+  ω0 = 1.
+  ω_max = 1.0e10
+  ε = 1.0e-6
+  ρ0 = 0.4
+  ρ1 = 1.5 
+  β_succ = 2.
+  β_fail = 0.5
+  γ_fail = 5.
 
-  SCPParam_GuSTO(Delta0, omega0, omegamax, epsilon, rho0, rho1, beta_succ, beta_fail, gamma_fail)
+  SCPParam_GuSTO(Δ0, ω0, ω_max, ε, ρ0, ρ1, β_succ, β_fail, γ_fail)
 end
 
 ######
@@ -285,7 +285,7 @@ function cost(traj, traj_prev::Trajectory, SCPP::SCPProblem{Car, DubinsCar, E}) 
   J = dtp*norm(U[1:N-1])^2
 end
 
-function add_variables!(solver_model::Model, SCPV::SCPVariables{JuMP.Variable}, SCPP::SCPProblem{Car, DubinsCar, E}) where E
+function add_variables!(solver_model::Model, SCPV::SCPVariables{JuMP.VariableRef}, SCPP::SCPProblem{Car, DubinsCar, E}) where E
 	robot, model = SCPP.PD.robot, SCPP.PD.model
 	x_dim, u_dim, N = model.x_dim, model.u_dim, SCPP.N
 

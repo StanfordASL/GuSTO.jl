@@ -17,13 +17,14 @@ mutable struct Freeflyer{T<:AbstractFloat} <: Robot
   r::T
   hard_limit_vel::T
   hard_limit_accel::T 
-  hard_limit_omega::T
-  hard_limit_alpha::T
+  hard_limit_ω::T
+  hard_limit_α::T
   btCollisionObject
 
   xb::Vector{T}
   Jcollision
 end
+
 function Freeflyer{T}() where T
   n_thrusters = 8
   r = 0.157
@@ -42,9 +43,9 @@ function Freeflyer{T}() where T
   thrust_max = 2*0.185  # max thrust [N] from two thrusters 
   hard_limit_accel = thrust_max/mass_ff 
 
-  hard_limit_omega = 20*pi/180
+  hard_limit_ω = 20*π/180
   wheel_torque_limit = 0.593        # 84 oz-in (https://www.pololu.com/product/2822/specs)
-  hard_limit_alpha = J_w_inv*wheel_torque_limit
+  hard_limit_α = J_w_inv*wheel_torque_limit
 
   xb = [0.; 0.15; 0.]
   Jcollision = []
@@ -57,7 +58,7 @@ function Freeflyer{T}() where T
 
   # new Freeflyer instance
   return Freeflyer{T}(mass_ff_min,mass_ff_max,mass_ff,J_ff,J_ff_inv,J_w,J_w_inv,n_thrusters,r,
-    hard_limit_vel,hard_limit_accel,hard_limit_omega,hard_limit_alpha,
+    hard_limit_vel,hard_limit_accel,hard_limit_ω,hard_limit_α,
     btCollisionObject,xb,Jcollision)
 end
 Freeflyer(::Type{T} = Float64; kwargs...) where {T} = Freeflyer{T}(; kwargs...)

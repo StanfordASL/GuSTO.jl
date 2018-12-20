@@ -2,18 +2,18 @@
 export solve_mao_cvx!
 
 mutable struct SCPParam_Mao <: SCPParamSpecial
-  rho::Vector         # trust-region acceptance thresholds
-  Delta_u0            # initial trust region size for control
-  lambda              # penalty weight
-  alpha               # trust region shrinkage & growth factor 
+  ρ::Vector         # trust-region acceptance thresholds
+  Δ_u0          		# initial trust region size for control
+  λ              		# penalty weight
+  α               	# trust region shrinkage & growth factor 
 
-  r_vec::Vector           # trust region ratios
-  Delta_u_vec::Vector     # trust region size for control
+  r_vec::Vector     # trust region ratios
+  Δ_u_vec::Vector   # trust region size for control
 end
 
 
-function SCPParam_Mao(rho, Delta_u0, lambda, alpha)
-	SCPParam_Mao(rho, Delta_u0, lambda, alpha, [0.], [Delta_u0])
+function SCPParam_Mao(ρ, Δ_u0, λ, α)
+	SCPParam_Mao(ρ, Δ_u0, λ, α, [0.], [Δ_u0])
 end
 
 function solve_mao_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", max_iter=50, force=false; kwarg...)
@@ -36,9 +36,9 @@ function solve_mao_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", max
 	param = SCPP.param
 
 	param.alg = SCPParam_Mao(SCPP.PD.model)
-  alpha, Delta_u0 = param.alg.alpha, param.alg.Delta_u0
-  r_vec, Delta_u_vec = param.alg.r_vec, param.alg.Delta_u_vec
-  rho0, rho1, rho2 = param.alg.rho
+  α, Δ_u0 = param.alg.α, param.alg.Δ_u0
+  r_vec, Δ_u_vec = param.alg.r_vec, param.alg.Δ_u_vec
+  ρ0, ρ1, ρ2 = param.alg.ρ
 
 	iter_cap = SCPS.iterations + max_iter
 	SCPV = SCPVariables{Convex.Variable,Convex.Variable}(SCPP)
@@ -74,7 +74,7 @@ function solve_mao_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", max
 
     # Check trust regions
 		push!(r_vec, trust_region_ratio_mao(new_traj, SCPS.traj, SCPP))
-    if r_vec[end] < rho0
+    if r_vec[end] < ρ0
 			push!(SCPS.accept_solution, false)
       push!(SCPS.J_true, SCPS.J_true[end])
     else
@@ -84,15 +84,15 @@ function solve_mao_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", max
     end
 
     # Adjust trust region radius
-    if r_vec[end] < rho0 || r_vec[end] < rho1
+    if r_vec[end] < ρ0 || r_vec[end] < ρ1
       # shrink trust region
-      push!(Delta_u_vec, 1/alpha*Delta_u_vec[end])
-    elseif r_vec[end] < rho2
+      push!(Δ_u_vec, 1/α*Δ_u_vec[end])
+    elseif r_vec[end] < ρ2
       # maintain trust region
-      push!(Delta_u_vec, Delta_u_vec[end])
+      push!(Δ_u_vec, Δ_u_vec[end])
     else
       # expand trust region
-      push!(Delta_u_vec, alpha*Delta_u_vec[end])
+      push!(Δ_u_vec, α*Δ_u_vec[end])
     end
 
     iter_elapsed_time = toq()
@@ -111,7 +111,7 @@ end
 
 function add_constraints_mao_cvx(SCPV::SCPVariables, traj_prev::Trajectory, SCPC::SCPConstraints, SCPP::SCPProblem)
 	constraints = Convex.Constraint[]
-	Delta_u = SCPP.param.alg.Delta_u_vec[end]
+	Δ_u = SCPP.param.alg.Δ_u_vec[end]
 
 	update_model_params!(SCPP, traj_prev)
   
@@ -132,18 +132,18 @@ function add_constraints_mao_cvx(SCPV::SCPVariables, traj_prev::Trajectory, SCPC
 	end
 
 	for (f, k, i) in SCPC.control_trust_region_ineq
-		constraints += f(SCPV, traj_prev, SCPP, k, i) - Delta_u <= 0.
+		constraints += f(SCPV, traj_prev, SCPP, k, i) - Δ_u <= 0.
 	end
 
 	return constraints
 end
 
 function cost_nonconvex_penalty_convexified_mao(traj, traj_prev::Trajectory, SCPC::SCPConstraints, SCPP::SCPProblem)
-	lambda = SCPP.param.alg.lambda
+	λ = SCPP.param.alg.λ
 
 	J = 0
   for (f, k, i) in SCPC.dynamics
-		J += lambda*norm(f(traj, traj_prev, SCPP, k, i), Inf)
+		J += λ*norm(f(traj, traj_prev, SCPP, k, i), Inf)
 	end
 
 	return J
@@ -152,3 +152,4 @@ end
 function cost_full_convexified_mao(traj, traj_prev::Trajectory, SCPC::SCPConstraints, SCPP::SCPProblem)
 	cost_true_convexified(traj, traj_prev, SCPP) + cost_nonconvex_penalty_convexified_mao(traj, traj_prev, SCPC, SCPP)
 end
+

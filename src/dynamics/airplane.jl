@@ -2,9 +2,9 @@ export Airplane
 export init_traj_straightline, init_traj_feasible_sos, init_traj_line_sos
 
 mutable struct Airplane <: DynamicsModel
-  # state: (x,y,z,psi,v,gamma,phi,alpha)
-  # pos- xyz, heading- psi, speed- v, flight path angle- gamma, roll- phi, angle of attack- alpha,
-  # control: (u_acc, u_phi_d, u_alpha_d)
+  # state: (x,y,z,ψ,v,γ,ϕ,α)
+  # pos- xyz, heading- ψ, speed- v, flight path angle- γ, roll- ϕ, angle of attack- α,
+  # control: (u_acc, u_ϕ_d, u_α_d)
   x_dim
   u_dim
 
@@ -31,7 +31,7 @@ function Airplane(robot::Plane)
   goal_min = [x_max[1:2]; 15] - [10; 10; 10]
   goal_max = x_max 
   
-  u_max = [robot.acc_lim; robot.phi_d_lim; robot.alpha_d_lim]
+  u_max = [robot.acc_lim; robot.ϕ_d_lim; robot.α_d_lim]
   u_min = -u_max
   clearance = 25. 
   return Airplane(x_dim, u_dim, x_min, x_max, goal_min, goal_max, u_min, u_max, clearance, [], [], [])
@@ -45,70 +45,70 @@ end
 
 function SCPParam_GuSTO(model::Airplane)
   # Straight line in workspace 
-  Delta0 = 10000. 
-  omega0 = 1.
-  omegamax = 100.
-  epsilon = 1.
-  rho0 = 0.1
-  rho1 = 0.4
-  beta_succ = 2. 
-  beta_fail = 0.5
-  gamma_fail = 5. 
+  Δ0 = 10000. 
+  ω0 = 1.
+  ω_max = 100.
+  ε = 1.
+  ρ0 = 0.1
+  ρ1 = 0.4
+  β_succ = 2. 
+  β_fail = 0.5
+  γ_fail = 5. 
   
   # Dynamically feasible
-  Delta0 = 20000. 
-  omega0 = 1.
-  omegamax = 100.
-  epsilon = 1.
-  rho0 = 0.01
-  rho1 = 0.1
-  beta_succ = 2. 
-  beta_fail = 0.5
-  gamma_fail = 8. 
+  Δ0 = 20000. 
+  ω0 = 1.
+  ω_max = 100.
+  ε = 1.
+  ρ0 = 0.01
+  ρ1 = 0.1
+  β_succ = 2. 
+  β_fail = 0.5
+  γ_fail = 8. 
 
   # Dynamically feasible, collision free
-  Delta0 = 5000. 
-  omega0 = 1.
-  omegamax = 1000.
-  epsilon = 1.
-  rho0 = 0.01
-  rho1 = 0.1
-  beta_succ = 2. 
-  beta_fail = 0.5
-  gamma_fail = 8. 
+  Δ0 = 5000. 
+  ω0 = 1.
+  ω_max = 1000.
+  ε = 1.
+  ρ0 = 0.01
+  ρ1 = 0.1
+  β_succ = 2. 
+  β_fail = 0.5
+  γ_fail = 8. 
 
-  SCPParam_GuSTO(Delta0, omega0, omegamax, epsilon, rho0, rho1, beta_succ, beta_fail, gamma_fail)
+  SCPParam_GuSTO(Δ0, ω0, ω_max, ε, ρ0, ρ1, β_succ, β_fail, γ_fail)
 end
 
 function SCPParam_Mao(model::Airplane)
   # Straight line in workspace 
-  rho = [-5.; -2; 0.5]
-  Delta_u0 = 10000. 
-  lambda = 1.
-  alpha = 2.
+  ρ = [-5.; -2; 0.5]
+  Δ_u0 = 10000. 
+  λ = 1.
+  α = 2.
   
   # Dynamically feasible
-  rho = [-5.; -2; 0.5]
-  Delta_u0 = 10000. 
-  lambda = 5.
-  alpha = 2.
+  ρ = [-5.; -2; 0.5]
+  Δ_u0 = 10000. 
+  λ = 5.
+  α = 2.
 
   # Dynamically feasible, collision free
-  rho = [-5.; -2; 0.5]
-  Delta_u0 = 100. 
-  lambda = 1.
-  alpha = 2.
+  ρ = [-5.; -2; 0.5]
+  Δ_u0 = 100. 
+  λ = 1.
+  α = 2.
 
-  SCPParam_Mao(rho, Delta_u0, lambda, alpha)
+  SCPParam_Mao(ρ, Δ_u0, λ, α)
 end
 
 function SCPParam_TrajOpt(model::Airplane)
   # Straight line in workspace 
-  mu0 = 1.
+  μ0 = 1.
   s0 = 10000.
   c = 0.25 
-  tau_plus = 2. 
-  tau_minus = 0.5
+  τ_plus = 2. 
+  τ_minus = 0.5
   k = 8. 
   ftol = 0.01
   xtol = 0.1
@@ -118,11 +118,11 @@ function SCPParam_TrajOpt(model::Airplane)
   max_trust_iteration = 5
   
   # Dynamically feasible
-  mu0 = 1.
+  μ0 = 1.
   s0 = 10000.
   c = 0.25 
-  tau_plus = 2. 
-  tau_minus = 0.5
+  τ_plus = 2. 
+  τ_minus = 0.5
   k = 5. 
   ftol = 0.01
   xtol = 0.1
@@ -132,11 +132,11 @@ function SCPParam_TrajOpt(model::Airplane)
   max_trust_iteration = 5
 
   # Dynamically feasible, collision free
-  mu0 = 1.
+  μ0 = 1.
   s0 = 10000.
   c = 0.25 
-  tau_plus = 2. 
-  tau_minus = 0.5
+  τ_plus = 2. 
+  τ_minus = 0.5
   k = 5. 
   ftol = 0.01
   xtol = 0.1
@@ -145,7 +145,7 @@ function SCPParam_TrajOpt(model::Airplane)
   max_convex_iteration = 5
   max_trust_iteration = 5
 
-  SCPParam_TrajOpt(mu0, s0, c, tau_plus, tau_minus, k, ftol, xtol, ctol,max_penalty_iteration,max_convex_iteration,max_trust_iteration)
+  SCPParam_TrajOpt(μ0, s0, c, τ_plus, τ_minus, k, ftol, xtol, ctol,max_penalty_iteration,max_convex_iteration,max_trust_iteration)
 end
 
 ###############
@@ -287,22 +287,22 @@ function f_dyn(x::Vector, u::Vector, robot::Robot, model::Airplane)
 end
 
 function update_f!(f, x::Vector, u::Vector, robot::Robot, model::Airplane)
-  # pos- xyz, heading- psi, speed- v, flight path angle- gamma, roll- phi, angle of attack- alpha,
-  rx, ry, rz, psi, v, gamma, phi, alpha = x
-  u_a, u_phid, u_alphad = u
-  g, rho, Area, mass = robot.g, robot.rho, robot.Area, robot.mass
-  Cd0, Kd, alpha_0 = robot.Cd0, robot.Kd, robot.alpha_0
-  Fl = pi*rho*Area*v^2*alpha
-  Fd = rho*Area*v^2*(Cd0 + 4*pi^2*Kd*alpha^2)
+  # pos- xyz, heading- ψ, speed- v, flight path angle- γ, roll- ϕ, angle of attack- α,
+  rx, ry, rz, ψ, v, γ, ϕ, α = x
+  u_a, u_ϕd, u_αd = u
+  g, ρ, Area, mass = robot.g, robot.ρ, robot.Area, robot.mass
+  Cd0, Kd, α_0 = robot.Cd0, robot.Kd, robot.α_0
+  Fl = π*ρ*Area*v^2*α
+  Fd = ρ*Area*v^2*(Cd0 + 4*π^2*Kd*α^2)
 
-  f[1] = v*cos(psi)*cos(gamma)
-  f[2] = v*sin(psi)*cos(gamma)
-  f[3] = v*sin(gamma)
-  f[4] = -Fl*sin(phi)/(mass*v*cos(gamma))
-  f[5] = u_a - Fd/mass - g*sin(gamma)
-  f[6] = Fl*cos(phi)/(mass*v) - g*cos(gamma)/v
-  f[7] = u_phid
-  f[8] = u_alphad
+  f[1] = v*cos(ψ)*cos(γ)
+  f[2] = v*sin(ψ)*cos(γ)
+  f[3] = v*sin(γ)
+  f[4] = -Fl*sin(ϕ)/(mass*v*cos(γ))
+  f[5] = u_a - Fd/mass - g*sin(γ)
+  f[6] = Fl*cos(ϕ)/(mass*v) - g*cos(γ)/v
+  f[7] = u_ϕd
+  f[8] = u_αd
 end
 
 function A_dyn(x::Vector, robot::Robot, model::Airplane)
@@ -313,25 +313,25 @@ function A_dyn(x::Vector, robot::Robot, model::Airplane)
 end
 
 function update_A!(A, x::Vector, robot::Robot, model::Airplane)
-  rx, ry, rz, psi, v, gamma, phi, alpha = x
-  g, rho, Area, mass = robot.g, robot.rho, robot.Area, robot.mass
+  rx, ry, rz, ψ, v, γ, ϕ, α = x
+  g, ρ, Area, mass = robot.g, robot.ρ, robot.Area, robot.mass
   Cd0, Kd = robot.Cd0, robot.Kd
 
   # See scripts/symbolic_math.m for derivation of these equations
-  A[1,4:6] = [-v*cos(gamma)*sin(psi) cos(gamma)*cos(psi) -v*cos(psi)*sin(gamma)]
-  A[2,4:6] = [ v*cos(gamma)*cos(psi) cos(gamma)*sin(psi) -v*sin(gamma)*sin(psi)]
-  A[3,5:6] = [                       sin(gamma)           v*cos(gamma)]
-  A[4,5] = -(pi*Area*alpha*rho*sin(phi))/(mass*cos(gamma))
-  A[4,6] = -(pi*Area*alpha*rho*v*sin(gamma)*sin(phi))/(mass*cos(gamma)^2)
-  A[4,7] = -(pi*Area*alpha*rho*v*cos(phi))/(mass*cos(gamma))
-  A[4,8] = -(pi*Area*rho*v*sin(phi))/(mass*cos(gamma))
-  A[5,5] = -(2*Area*rho*v*((39.4784*Kd*alpha^2)/ + Cd0))/mass
-  A[5,6] = -g*cos(gamma)
-  A[5,8] = -(78.9568*Area*Kd*alpha*rho*v^2)/mass
-  A[6,5] = (g*cos(gamma))/v^2 + (pi*Area*alpha*rho*cos(phi))/mass
-  A[6,6] = (g*sin(gamma))/v
-  A[6,7] = -(pi*Area*alpha*rho*v*sin(phi))/mass
-  A[6,8] = (pi*Area*rho*v*cos(phi))/mass
+  A[1,4:6] = [-v*cos(γ)*sin(ψ) cos(γ)*cos(ψ) -v*cos(ψ)*sin(γ)]
+  A[2,4:6] = [ v*cos(γ)*cos(ψ) cos(γ)*sin(ψ) -v*sin(γ)*sin(ψ)]
+  A[3,5:6] = [                       sin(γ)           v*cos(γ)]
+  A[4,5] = -(π*Area*α*ρ*sin(ϕ))/(mass*cos(γ))
+  A[4,6] = -(π*Area*α*ρ*v*sin(γ)*sin(ϕ))/(mass*cos(γ)^2)
+  A[4,7] = -(π*Area*α*ρ*v*cos(ϕ))/(mass*cos(γ))
+  A[4,8] = -(π*Area*ρ*v*sin(ϕ))/(mass*cos(γ))
+  A[5,5] = -(2*Area*ρ*v*((39.4784*Kd*α^2)/ + Cd0))/mass
+  A[5,6] = -g*cos(γ)
+  A[5,8] = -(78.9568*Area*Kd*α*ρ*v^2)/mass
+  A[6,5] = (g*cos(γ))/v^2 + (π*Area*α*ρ*cos(ϕ))/mass
+  A[6,6] = (g*sin(γ))/v
+  A[6,7] = -(π*Area*α*ρ*v*sin(ϕ))/mass
+  A[6,8] = (π*Area*ρ*v*cos(ϕ))/mass
 end
 
 function B_dyn(x::Vector, robot::Robot, model::Airplane)
@@ -342,7 +342,7 @@ function B_dyn(x::Vector, robot::Robot, model::Airplane)
 end
 
 ## Convex state inequality constraints
-# X: (x,y,z,psi,v,gamma,phi, alpha)
+# X: (x,y,z,ψ,v,γ,ϕ, α)
 function csi_goal_region_min_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{Plane{T}, Airplane, E}, k::Int, i::Int) where {T,E}
 	# Where i is the state index, and k is the timestep index
 	X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_airplane(traj, traj_prev, SCPP)
@@ -364,24 +364,24 @@ function csi_v_min_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{Pla
   return -X[5,k]+robot.v_min
 end
 
-function csi_gamma_max_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{Plane{T}, Airplane, E}, k::Int, i::Int) where {T,E}
+function csi_γ_max_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{Plane{T}, Airplane, E}, k::Int, i::Int) where {T,E}
 	X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_airplane(traj, traj_prev, SCPP)
-  return X[6,k]-robot.gamma_max
+  return X[6,k]-robot.γ_max
 end
 
-function csi_gamma_min_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{Plane{T}, Airplane, E}, k::Int, i::Int) where {T,E}
+function csi_γ_min_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{Plane{T}, Airplane, E}, k::Int, i::Int) where {T,E}
 	X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_airplane(traj, traj_prev, SCPP)
-  return -X[6,k]-robot.gamma_max
+  return -X[6,k]-robot.γ_max
 end
 
-function csi_phi_max_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{Plane{T}, Airplane, E}, k::Int, i::Int) where {T,E}
+function csi_ϕ_max_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{Plane{T}, Airplane, E}, k::Int, i::Int) where {T,E}
 	X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_airplane(traj, traj_prev, SCPP)
-  return X[7,k]-robot.gamma_max
+  return X[7,k]-robot.γ_max
 end
 
-function csi_phi_min_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{Plane{T}, Airplane, E}, k::Int, i::Int) where {T,E}
+function csi_ϕ_min_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{Plane{T}, Airplane, E}, k::Int, i::Int) where {T,E}
 	X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_airplane(traj, traj_prev, SCPP)
-  return -X[7,k]-robot.gamma_max
+  return -X[7,k]-robot.γ_max
 end
 
 ## Nonconvex state inequality constraints
@@ -476,10 +476,10 @@ function SCPConstraints(SCPP::SCPProblem{Plane{T}, Airplane, E}) where {T,E}
 	for k = 1:N
 		push!(SCPC.convex_state_ineq, (csi_v_max_constraints, k, 0))
 		push!(SCPC.convex_state_ineq, (csi_v_min_constraints, k, 0))
-		push!(SCPC.convex_state_ineq, (csi_gamma_max_constraints, k, 0))
-		push!(SCPC.convex_state_ineq, (csi_gamma_min_constraints, k, 0))
-		push!(SCPC.convex_state_ineq, (csi_phi_max_constraints, k, 0))
-		push!(SCPC.convex_state_ineq, (csi_phi_min_constraints, k, 0))
+		push!(SCPC.convex_state_ineq, (csi_γ_max_constraints, k, 0))
+		push!(SCPC.convex_state_ineq, (csi_γ_min_constraints, k, 0))
+		push!(SCPC.convex_state_ineq, (csi_ϕ_max_constraints, k, 0))
+		push!(SCPC.convex_state_ineq, (csi_ϕ_min_constraints, k, 0))
 	end
 
 	## Nonconvex state equality constraints
@@ -566,11 +566,11 @@ function trust_region_ratio_trajopt(traj, traj_prev::Trajectory, SCPP::SCPProble
   dt = traj.dt
 
   for k in 1:N-1
-    phi_old = norm(fp[k] - (Xp[:,k]-Xp[:,k])/dtp, 1)
-    phi_new = norm(f_dyn(X[:,k],U[:,k],robot,model) - (X[:,k]-X[:,k])/dt, 1)
-    phi_hat_new = norm(dynamics_constraints(traj,traj_prev,SCPP,k,0), 1)
-    num += (phi_old-phi_new)
-    den += (phi_old-phi_hat_new) 
+    ϕ_old = norm(fp[k] - (Xp[:,k]-Xp[:,k])/dtp, 1)
+    ϕ_new = norm(f_dyn(X[:,k],U[:,k],robot,model) - (X[:,k]-X[:,k])/dt, 1)
+    ϕ_hat_new = norm(dynamics_constraints(traj,traj_prev,SCPP,k,0), 1)
+    num += (ϕ_old-ϕ_new)
+    den += (ϕ_old-ϕ_hat_new) 
   end
 
   clearance = model.clearance
@@ -580,17 +580,17 @@ function trust_region_ratio_trajopt(traj, traj_prev::Trajectory, SCPP::SCPProble
     for (rb_idx,body_point) in enumerate(env_.convex_robot_components)
       for (env_idx,convex_env_component) in enumerate(env_.convex_env_components)
         dist,xbody,xobs = BulletCollision.distance(env_,rb_idx,r0,env_idx)
-        phi_old = clearance-dist
+        ϕ_old = clearance-dist
         
         dist,xbody,xobs = BulletCollision.distance(env_,rb_idx,r,env_idx)
         nhat = dist > 0 ?
           (xbody-xobs)./norm(xbody-xobs) :
           (xobs-xbody)./norm(xobs-xbody) 
-        phi_new = clearance-dist
-        phi_hat_new = clearance - (dist + nhat'*(r-r0))
+        ϕ_new = clearance-dist
+        ϕ_hat_new = clearance - (dist + nhat'*(r-r0))
 
-        num += (phi_old-phi_new)
-        den += (phi_old-phi_hat_new) 
+        num += (ϕ_old-ϕ_new)
+        den += (ϕ_old-ϕ_hat_new) 
       end
     end
   end

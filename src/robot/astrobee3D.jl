@@ -8,8 +8,8 @@ mutable struct Astrobee3D{T<:AbstractFloat} <: Robot
   r::T
   hard_limit_vel::T
   hard_limit_accel::T 
-  hard_limit_omega::T
-  hard_limit_alpha::T
+  hard_limit_ω::T
+  hard_limit_α::T
   btCollisionObject
 end
 function Astrobee3D{T}() where T
@@ -21,8 +21,8 @@ function Astrobee3D{T}() where T
   mass = 7.0 
   hard_limit_vel = 0.5 # Actual limit: 0.5
   hard_limit_accel = 0.1 
-  hard_limit_omega = 45*pi/180 
-  hard_limit_alpha = 50*pi/180 
+  hard_limit_ω = 45*π/180 
+  hard_limit_α = 50*π/180 
  
   J = 0.1083*Eye(3) 
   Jinv = inv(J)
@@ -30,6 +30,7 @@ function Astrobee3D{T}() where T
   btCollisionObject = BulletCollision.sphere(SVector{3}(zeros(T,3)), r)
 
   # new astrobee instance
-  return Astrobee3D{T}(mass, J, Jinv, n_thrusters, r, hard_limit_vel, hard_limit_accel, hard_limit_omega, hard_limit_alpha,btCollisionObject)
+  return Astrobee3D{T}(mass, J, Jinv, n_thrusters, r, hard_limit_vel, hard_limit_accel, hard_limit_ω, hard_limit_α,btCollisionObject)
 end
 Astrobee3D(::Type{T} = Float64; kwargs...) where {T} = Astrobee3D{T}(; kwargs...)
+

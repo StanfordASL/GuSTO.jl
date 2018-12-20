@@ -26,33 +26,33 @@ function SCPParam(model::FreeflyerSE2, fixed_final_time::Bool)
 end
 
 function SCPParam_GuSTO(model::FreeflyerSE2)
-  Delta0 = 3.
-  omega0 = 1.
-  omegamax = 1.0e10
-  epsilon = 1.0e-6
-  rho0 = 0.1
-  rho1 = 0.3
-  beta_succ = 2.
-  beta_fail = 0.5
-  gamma_fail = 5.
+  Δ0 = 3.
+  ω0 = 1.
+  ω_max = 1.0e10
+  ε = 1.0e-6
+  ρ0 = 0.1
+  ρ1 = 0.3
+  β_succ = 2.
+  β_fail = 0.5
+  γ_fail = 5.
 
-  SCPParam_GuSTO(Delta0, omega0, omegamax, epsilon, rho0, rho1, beta_succ, beta_fail, gamma_fail)
+  SCPParam_GuSTO(Δ0, ω0, ω_max, ε, ρ0, ρ1, β_succ, β_fail, γ_fail)
 end
 
 function SCPParam_Mao(model::FreeflyerSE2)
-  rho = [0.;0.25;0.9]
-  Delta_u0 = 0.1
-  lambda = 1.
-  alpha = 2.
-  SCPParam_Mao(rho, Delta_u0, lambda, alpha)
+  ρ = [0.;0.25;0.9]
+  Δ_u0 = 0.1
+  λ = 1.
+  α = 2.
+  SCPParam_Mao(ρ, Δ_u0, λ, α)
 end
 
 function SCPParam_TrajOpt(model::FreeflyerSE2)
-  mu0 = 1.
+  μ0 = 1.
   s0 = 1.
   c = 10. 
-  tau_plus = 2. 
-  tau_minus = 0.5 
+  τ_plus = 2. 
+  τ_minus = 0.5 
   k = 5. 
   ftol = 0.01
   xtol = 0.1
@@ -61,7 +61,7 @@ function SCPParam_TrajOpt(model::FreeflyerSE2)
   max_convex_iteration = 5
   max_trust_iteration = 5
 
-  SCPParam_TrajOpt(mu0, s0, c, tau_plus, tau_minus, k, ftol, xtol, ctol,max_penalty_iteration,max_convex_iteration,max_trust_iteration)
+  SCPParam_TrajOpt(μ0, s0, c, τ_plus, τ_minus, k, ftol, xtol, ctol, max_penalty_iteration,max_convex_iteration,max_trust_iteration)
 end
 
 ###############
@@ -227,7 +227,7 @@ end
 function cci_angular_accel_bound(traj, traj_prev::Trajectory, SCPP::SCPProblem{Freeflyer{T}, FreeflyerSE2, E}, k::Int, i::Int) where {T,E}
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_freeflyerSE2(traj, traj_prev, SCPP)
   Jzz_inv = robot.J_ff_inv
-  return abs(Jzz_inv*U[3,k]) - robot.hard_limit_alpha
+  return abs(Jzz_inv*U[3,k]) - robot.hard_limit_α
 end
 
 ## Nonconvex state inequality constraints
@@ -428,11 +428,11 @@ function trust_region_ratio_trajopt(traj, traj_prev::Trajectory, SCPP::SCPProble
 
 
   for k in 1:N-1
-    phi_old = norm(fp[k] - (Xp[:,k]-Xp[:,k])/dtp, 1)
-    phi_new = norm(f_dyn(X[:,k],U[:,k],robot,model) - (X[:,k]-X[:,k])/dt, 1)
-    phi_hat_new = norm(dynamics_constraints(traj,traj_prev,SCPP,k,0), 1)
-    num += (phi_old-phi_new)
-    den += (phi_old-phi_hat_new) 
+    ϕ_old = norm(fp[k] - (Xp[:,k]-Xp[:,k])/dtp, 1)
+    ϕ_new = norm(f_dyn(X[:,k],U[:,k],robot,model) - (X[:,k]-X[:,k])/dt, 1)
+    ϕ_hat_new = norm(dynamics_constraints(traj,traj_prev,SCPP,k,0), 1)
+    num += (ϕ_old-ϕ_new)
+    den += (ϕ_old-ϕ_hat_new) 
   end
 
   clearance = model.clearance
@@ -443,17 +443,17 @@ function trust_region_ratio_trajopt(traj, traj_prev::Trajectory, SCPP::SCPProble
     for (rb_idx,body_point) in enumerate(env_.convex_robot_components)
       for (env_idx,convex_env_component) in enumerate(env_.convex_env_components)
         dist,xbody,xobs = BulletCollision.distance(env_,rb_idx,r0,env_idx)
-        phi_old = clearance-dist
+        ϕ_old = clearance-dist
         
         dist,xbody,xobs = BulletCollision.distance(env_,rb_idx,r,env_idx)
         nhat = dist > 0 ?
           (xbody-xobs)./norm(xbody-xobs) :
           (xobs-xbody)./norm(xobs-xbody) 
-        phi_new = clearance-dist
-        phi_hat_new = clearance - (dist + nhat'*(r-r0))
+        ϕ_new = clearance-dist
+        ϕ_hat_new = clearance - (dist + nhat'*(r-r0))
 
-        num += (phi_old-phi_new)
-        den += (phi_old-phi_hat_new) 
+        num += (ϕ_old-ϕ_new)
+        den += (ϕ_old-ϕ_hat_new) 
       end
     end
   end

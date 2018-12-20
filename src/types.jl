@@ -77,7 +77,7 @@ mutable struct SCPProblem{R<:Robot, D<:DynamicsModel, E<:Environment}
 	dh				# Normalized dt
 end
 
-VariableTypes = Union{Convex.Variable, JuMP.Variable}
+VariableTypes = Union{Convex.Variable, JuMP.VariableRef}
 
 mutable struct SCPVariables{T <: VariableTypes, S<:Union{T,Array{T}}}
 	X::S 		# State trajectory
@@ -85,12 +85,12 @@ mutable struct SCPVariables{T <: VariableTypes, S<:Union{T,Array{T}}}
 	Tf::T 	# Final time
 
 	SCPVariables{T,S}() where {T <: VariableTypes, S<:Union{T,Array{T}}} = new()
-	SCPVariables{T,S}(X,Y) where {T <: VariableTypes, S<:Union{T,Array{T}}} = new(X,Y)
-	SCPVariables{T,S}(X,Y,Tf) where {T <: VariableTypes, S<:Union{T,Array{T}}} = new(X,Y,Tf)
+	SCPVariables{T,S}(X,U) where {T <: VariableTypes, S<:Union{T,Array{T}}} = new(X,U)
+	SCPVariables{T,S}(X,U,Tf) where {T <: VariableTypes, S<:Union{T,Array{T}}} = new(X,U,Tf)
 end
-SCPVariables(X::S,Y::S) where {S<:Union{VariableTypes,Array{VariableTypes}}} = SCPVariables{T,S}(X,Y)
-SCPVariables(X::S,Y::S,Tf::T) where {T <: VariableTypes, S<:Union{T,Array{T}}} = SCPVariables{T,S}(X,Y,Tf)
-function SCPVariables{T,S}(SCPP::SCPProblem) where {T <: VariableTypes, S<:Union{T,Array{T}}}
+SCPVariables(X::S,U::S) where {S<:Union{VariableTypes,Array{VariableTypes}}} = SCPVariables{T,S}(X,U)
+SCPVariables(X::S,U::S,Tf::T) where {T <: VariableTypes, S<:Union{T,Array{T}}} = SCPVariables{T,S}(X,U,Tf)
+function SCPVariables{T,S}(SCPP::SCPProblem) where {T <: Convex.Variable, S<:Union{T,Array{T}}}
 	X = Convex.Variable(SCPP.PD.model.x_dim, SCPP.N)
 	U = Convex.Variable(SCPP.PD.model.u_dim, SCPP.N-1)
 	Tf = Convex.Variable(1)

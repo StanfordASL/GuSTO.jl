@@ -5,8 +5,8 @@ mutable struct SCPParam_TrajOpt <: SCPParamSpecial
   mu0         # initial penalty coefficient
   s0          # initial trust region size
   c           # step acceptance parameter
-  tau_plus    # trust region expansion factor
-  tau_minus   # trust region shrinkage factor
+  τ_plus    # trust region expansion factor
+  τ_minus   # trust region shrinkage factor
   k           # penalty scaling factor
   ftol        # convergence threshold for merit
   xtol        # convergence threhsold for x
@@ -15,7 +15,7 @@ mutable struct SCPParam_TrajOpt <: SCPParamSpecial
   max_convex_iteration
   max_trust_iteration
 
-  rho_vec::Vector # trust region ratios
+  ρ_vec::Vector # trust region ratios
   mu_vec::Vector  # penalty coefficient
   s_vec::Vector   # trust region size
   xtol_vec::Vector
@@ -23,8 +23,8 @@ mutable struct SCPParam_TrajOpt <: SCPParamSpecial
   ctol_vec::Vector
 end
 
-function SCPParam_TrajOpt(mu0, s0, c, tau_plus, tau_minus, k, ftol, xtol, ctol,max_penalty_iteration,max_convex_iteration,max_trust_iteration)
-	SCPParam_TrajOpt(mu0, s0, c, tau_plus, tau_minus, k, ftol, xtol, ctol, 
+function SCPParam_TrajOpt(mu0, s0, c, τ_plus, τ_minus, k, ftol, xtol, ctol,max_penalty_iteration,max_convex_iteration,max_trust_iteration)
+	SCPParam_TrajOpt(mu0, s0, c, τ_plus, τ_minus, k, ftol, xtol, ctol, 
     max_penalty_iteration,max_convex_iteration,max_trust_iteration,[0.],[mu0], [s0], [0.], [0.], [0.])
 end
 
@@ -52,8 +52,8 @@ function solve_trajopt_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek",
 
 	param.alg = SCPParam_TrajOpt(SCPP.PD.model)
   mu0,s0 = param.alg.mu0, param.alg.s0
-  rho_vec,mu_vec,s_vec = param.alg.rho_vec, param.alg.mu_vec, param.alg.s_vec
-  tau_plus,tau_minus = param.alg.tau_plus, param.alg.tau_minus
+  ρ_vec,mu_vec,s_vec = param.alg.ρ_vec, param.alg.mu_vec, param.alg.s_vec
+  τ_plus,τ_minus = param.alg.τ_plus, param.alg.τ_minus
   c = param.alg.c
   ftol,xtol,ctol = param.alg.ftol, param.alg.xtol, param.alg.ctol
   ftol_vec, xtol_vec, ctol_vec = param.alg.ftol_vec, param.alg.xtol_vec, param.alg.ctol_vec
@@ -112,11 +112,11 @@ function solve_trajopt_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek",
         SCPS.dual = get_dual_cvx(prob, SCPP, solver)
 
         # grow or shrink trust region 
-        push!(rho_vec, trust_region_ratio_trajopt(new_traj, old_convex_traj, SCPP))
-        if rho_vec[end] > c
-          push!(s_vec, tau_plus*s_vec[end])
+        push!(ρ_vec, trust_region_ratio_trajopt(new_traj, old_convex_traj, SCPP))
+        if ρ_vec[end] > c
+          push!(s_vec, τ_plus*s_vec[end])
         else
-          push!(s_vec, tau_minus*s_vec[end])
+          push!(s_vec, τ_minus*s_vec[end])
         end
         
         copy!(SCPS.traj, new_traj)

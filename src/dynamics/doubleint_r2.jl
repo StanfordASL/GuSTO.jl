@@ -27,17 +27,17 @@ function SCPParam(model::DoubleIntR2, fixed_final_time::Bool)
 end
 
 function SCPParam_GuSTO(model::DoubleIntR2)
-  Delta0 = 1.
-  omega0 = 1.
-  omegamax = 1.0e10
-  epsilon = 1.0e-6
-  rho0 = 0.01
-  rho1 = 0.3
-  beta_succ = 2.
-  beta_fail = 0.5
-  gamma_fail = 10.
+  Δ0 = 1.
+  ω0 = 1.
+  ω_max = 1.0e10
+  ε = 1.0e-6
+  ρ0 = 0.01
+  ρ1 = 0.3
+  β_succ = 2.
+  β_fail = 0.5
+  γ_fail = 10.
 
-  SCPParam_GuSTO(Delta0, omega0, omegamax, epsilon, rho0, rho1, beta_succ, beta_fail, gamma_fail)
+  SCPParam_GuSTO(Δ0, ω0, ω_max, ε, ρ0, ρ1, β_succ, β_fail, γ_fail)
 end
 
 ###############
