@@ -21,4 +21,4 @@ function Factory{T}() where T
 
   return Factory{T}(worldAABBmin, worldAABBmax, keepin_zones, keepout_zones, obstacle_set)
 end
-Factory(::Type{T} = Float64; kwargs...) where {T} = ISS{T}(; kwargs...)
+Factory(::Type{T} = Float64; kwargs...) where {T} = Factory{T}(; kwargs...)

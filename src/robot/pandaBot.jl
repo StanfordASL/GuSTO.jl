@@ -5,8 +5,11 @@ mutable struct PandaBot{T<:AbstractFloat} <: Robot
   q_max
   q_min
   qd_max
+  qd_min
   qdd_max
+  qdd_min
   qddd_max
+  qddd_min
   tau_max
   tau_min
   taud_max
@@ -22,14 +25,14 @@ function PandaBot{T}() where T
   qdd_max   = [15;  7.5; 10; 12.5; 15; 20; 20]                                  # rad/s^2
   qddd_max  = [7500; 3750; 5000; 6250; 7500; 10000; 10000]                      # rad/s^3
   tau_max   = [87; 87; 87; 87; 12; 12; 12]                                      # N*m
-  tau_min   = -tau_max                                                          # N*m
   taud_max  = [1000; 1000; 1000; 1000; 1000; 1000; 1000]                        # N*m/s
-  taud_min  = -taud_max                                                         # N*m/s
 
   mechanism = Panda()
   btCollisionObject = BulletCollision.sphere(SVector{3}(zeros(T,3)), 0.5)
 
-  return PandaBot{T}(q_max,q_min,qd_max,qdd_max,qddd_max,tau_max,tau_min,taud_max,taud_min,
+  return PandaBot{T}(q_max,q_min,qd_max,-qd_max,
+    qdd_max,-qdd_max,qddd_max,-qddd_max,
+    tau_max,-tau_max,taud_max,-taud_max,
     mechanism,btCollisionObject)
 end
 PandaBot(::Type{T} = Float64; kwargs...) where {T} = PandaBot{T}(; kwargs...)
