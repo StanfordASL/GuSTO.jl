@@ -183,6 +183,9 @@ function cost_nonconvex_penalty_gusto(traj, traj_prev::Trajectory, SCPC::SCPCons
 	for (f, k, i) in SCPC.nonconvex_state_ineq
 		J += max(f(traj, traj_prev, SCPP, k, i), 0.)
 	end
+	for (f, k, i) in SCPC.nonconvex_state_eq
+		J += abs(f(traj, traj_prev, SCPP, k, i))
+	end
 	return J
 end
 
@@ -190,6 +193,9 @@ function cost_nonconvex_penalty_convexified_gusto(traj, traj_prev::Trajectory, S
 	J = 0.
 	for (f, k, i) in SCPC.nonconvex_state_convexified_ineq
 		J += max(f(traj, traj_prev, SCPP, k, i), 0.)
+	end
+	for (f, k, i) in SCPC.nonconvex_state_convexified_eq
+		J += abs(f(traj, traj_prev, SCPP, k, i))
 	end
 	return J
 end

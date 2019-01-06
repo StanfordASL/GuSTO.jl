@@ -1,5 +1,5 @@
 export PandaKin
-export init_traj_straightline, init_curve_so1
+export init_traj_straightline, init_traj_so1
 
 mutable struct PandaKin <: DynamicsModel
   # state: [ (cos(q_i), sin(q_i)) x .. x ... ] (for 7 joint angles q_i, i=1...7)
@@ -26,7 +26,7 @@ function PandaKin()
   u_dim = num_joints 
 
   clearance = 0.03
-  goal_position_EE_delta_error = 0.001 # 1mm of error admissible for EE position
+  goal_position_EE_delta_error = 0.01 # 1cm of error admissible for EE position
 
   PandaKin(x_dim,u_dim,num_joints,[],[],[],[],clearance, goal_position_EE_delta_error, [], [], [])
 end
@@ -37,12 +37,12 @@ function SCPParam(model::PandaKin, fixed_final_time::Bool)
 end
 
 function SCPParam_GuSTO(model::PandaKin)
-  Delta0 = 1000. 
+  Delta0 = 10000. 
   omega0 = 1.
   omegamax = 1.0e10
   epsilon = 1.0e-6
-  rho0 = 0.5
-  rho1 = 0.9
+  rho0 = 10. 
+  rho1 = 100. 
   beta_succ = 2.
   beta_fail = 0.5
   gamma_fail = 5.
@@ -80,21 +80,24 @@ function init_traj_straightline(TOP::TrajectoryOptimizationProblem{PandaBot{T}, 
   Trajectory(X, U, tf_guess)
 end
 
-function init_curve_so1(TOP::TrajectoryOptimizationProblem{PandaBot{T}, PandaKin, E}) where {T,E}
+function init_traj_so1(TOP::TrajectoryOptimizationProblem{PandaBot{T}, PandaKin, E}) where {T,E}
   model, x_init, x_goal = TOP.PD.model, TOP.PD.x_init, TOP.PD.x_goal
   x_dim, u_dim, N, tf_guess = model.x_dim, model.u_dim, TOP.N, TOP.tf_guess
   N = TOP.N
-
+  
   X = hcat(linspace(x_init, x_goal, N)...)
-  U = zeros(u_dim, N-1)
-
-  for i=2:2:x_dim
+  for i in 1:model.num_joints
     for k=1:N
-      sum_squares = sqrt.(X[i,k]*X[i,k] + X[i-1,k]*X[i-1,k])
-      X[i,k] = X[i,k] / sum_squares
-      X[i-1,k] = X[i-1,k] / sum_squares
+      sum_squares = sqrt.(X[2*i-1,k]*X[2*i-1,k] + X[2*i,k]*X[2*i,k])
+      X[2*i-1,k] = X[2*i-1,k] / sum_squares
+      X[2*i,k] = X[2*i,k] / sum_squares
     end
   end
+  
+  th_init, th_goal = get_configuration(x_init,model), get_configuration(x_goal,model)
+  th_dot = (th_goal-th_init) / (tf_guess/(N-1))
+  U = repmat(th_dot,1,N-1)
+
   Trajectory(X, U, tf_guess)
 end
 
@@ -119,8 +122,6 @@ function update_model_params!(SCPP::SCPProblem{PandaBot{T}, PandaKin, E}, traj_p
   Xp, Up, f, A, B = traj_prev.X, traj_prev.U, model.f, model.A, model.B
 
   # Update state and control box constraints
-  # model.x_min = collect(Base.Iterators.flatten([[cos(q);sin(q)] for q in robot.q_min]))
-  # model.x_max = collect(Base.Iterators.flatten([[cos(q);sin(q)] for q in robot.q_max])) 
   model.x_min = -ones(T,model.x_dim) 
   model.x_max = ones(T,model.x_dim) 
   model.u_min = robot.qd_min
@@ -207,6 +208,13 @@ end
 
 ## Convex control inequality constraints
 
+## Nonconvex state equality constraints
+function ncse_unit_norm_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{PandaBot{T}, PandaKin, E}, k::Int, i::Int) where {T,E}
+  X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_PandaKin(traj, traj_prev, SCPP)
+
+  X[i,k]^2 + X[i+1,k]^2 - 1. 
+end
+
 ## Nonconvex state inequality constraints
 function ncsi_obstacle_avoidance_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{PandaBot{T}, PandaKin, E}, k::Int, i::Int) where {T,E}
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_PandaKin(traj, traj_prev, SCPP)
@@ -240,6 +248,14 @@ function ncsi_EE_goal_constraints_negative(traj, traj_prev::Trajectory, SCPP::SC
   p_EE      = get_EE_position(X[:,N], SCPP)
 
   return -( p_EE[i] - p_EE_goal[i] ) - model.goal_position_EE_delta_error
+end
+
+## Nonconvex state equality constraints (convexified)
+function ncse_unit_norm_constraints_convexified(traj, traj_prev::Trajectory, SCPP::SCPProblem{PandaBot{T}, PandaKin, E}, k::Int, i::Int) where {T,E}
+  X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_PandaKin(traj, traj_prev, SCPP)
+
+  grad = 2*Xp[i:i+1,k] 
+  Xp[i,k]^2 + Xp[i+1,k]^2 - 1. + grad'*(X[i:i+1,] - Xp[i:i+1,k])
 end
 
 ## Nonconvex state inequality constraints (convexified)
@@ -328,8 +344,19 @@ function SCPConstraints(SCPP::SCPProblem{PandaBot{T}, PandaKin, E}) where {T,E}
     push!(SCPC.convex_state_ineq, (csi_min_bound_constraints, k, i))
 	end
 
-  ## Nonconvex state equality constraints
+  ## Convex control equality constraints
   nothing
+
+  ## Convex control inequality constraints
+  for k = 1:N-1
+		push!(SCPC.convex_control_ineq, (cci_max_bound_constraints, k, 1))
+		push!(SCPC.convex_control_ineq, (cci_min_bound_constraints, k, 1))
+  end
+
+  ## Nonconvex state equality constraints
+  for k = 1:N, i = 1:2:x_dim
+    push!(SCPC.nonconvex_state_eq, (ncse_unit_norm_constraints, k, i))
+  end
 
   ## Nonconvex state inequality constraints
   env_ = WS.btenvironment_keepout
@@ -343,7 +370,9 @@ function SCPConstraints(SCPP::SCPProblem{PandaBot{T}, PandaKin, E}) where {T,E}
   end
 
   ## Nonconvex state equality constraints (convexified)
-  nothing
+  for k = 1:N, i = 1:2:x_dim
+    push!(SCPC.nonconvex_state_convexified_eq, (ncse_unit_norm_constraints_convexified, k, i))
+  end
 
   ## Nonconvex state inequality constraints (convexified)
   env_ = WS.btenvironment_keepout
@@ -354,15 +383,6 @@ function SCPConstraints(SCPP::SCPProblem{PandaBot{T}, PandaKin, E}) where {T,E}
   for i = 1:3
     push!(SCPC.nonconvex_state_convexified_ineq, (ncsi_EE_goal_constraints_convexified         , 0, i))
     push!(SCPC.nonconvex_state_convexified_ineq, (ncsi_EE_goal_constraints_negative_convexified, 0, i))
-  end
-
-  ## Convex control equality constraints
-  nothing
-
-  ## Convex control inequality constraints
-  for k = 1:N-1
-		push!(SCPC.convex_control_ineq, (cci_max_bound_constraints, k, 1))
-		push!(SCPC.convex_control_ineq, (cci_min_bound_constraints, k, 1))
   end
 
   ## State trust region ineqality constraints
@@ -508,28 +528,22 @@ function verify_collision_free(traj::Trajectory, SCPP::SCPProblem{PandaBot{T}, P
   return true, 0, 0.
 end
 
-function get_configuration(X, SCPP::SCPProblem)
-  N, robot, model = SCPP.N, SCPP.PD.robot, SCPP.PD.model
+function get_configuration(X, model::PandaKin)
   q = zeros(model.num_joints)
   for i in 1:model.num_joints
     q[i] = atan2(X[2*i],X[2*i-1])
   end
   return q
 end
+get_configuration(X,SCPP::SCPProblem) = get_configuration(X,SCPP.PD.model)
 
 function get_EE_position(X, SCPP::SCPProblem)
   N, robot, model = SCPP.N, SCPP.PD.robot, SCPP.PD.model
-  pd = robot.mechanism
-
-  p_EE = zeros(3)
+  pan = robot.pan
 
   q = get_configuration(X,SCPP)
-  body = RigidBodyDynamics.bodies(pd.mechanism)[11]   # Panda hand frame
-  world = RigidBodyDynamics.root_frame(pd.mechanism)
-  state = RigidBodyDynamics.MechanismState(pd.mechanism)
-  set_configuration!(state,q)
-  desired_point = Point3D(default_frame(body),zeros(StaticArrays.SVector{3}))
-  p_EE = RigidBodyDynamics.Spatial.transform(state, desired_point, world)
+  set_configuration!(robot.state,q)
+  p_EE = RigidBodyDynamics.Spatial.transform(robot.state, robot.EE_link_point, robot.world_frame)
   p_EE = p_EE.v
 
   return p_EE
@@ -537,19 +551,14 @@ end
 
 function get_EE_Jacobian(X, SCPP::SCPProblem)
   N, robot, model = SCPP.N, SCPP.PD.robot, SCPP.PD.model
-  pd = robot.mechanism
+  pd = robot.pan
 
   J_p_EE = zeros(3,model.x_dim)
 
   # J_pEE_joint = dr/dq
   q = get_configuration(X,SCPP)
-  body = RigidBodyDynamics.bodies(pd.mechanism)[11]   # Panda hand frame
-  world = RigidBodyDynamics.root_frame(pd.mechanism)
-  p = RigidBodyDynamics.path(pd.mechanism, root_body(pd.mechanism), body)
-  state = RigidBodyDynamics.MechanismState(pd.mechanism)
-  set_configuration!(state,q)
-  desired_point = Point3D(default_frame(body),zeros(StaticArrays.SVector{3}))
-  J_pEE_joint = point_jacobian(state,p, RigidBodyDynamics.Spatial.transform(state,desired_point,world))
+  set_configuration!(robot.state,q)
+  J_pEE_joint = point_jacobian(robot.state,robot.EE_path, RigidBodyDynamics.Spatial.transform(robot.state,robot.EE_link_point,robot.world_frame))
   J_pEE_joint = J_pEE_joint.J[:,1:model.num_joints]
 
   # J_pEE_embedding = dq/dx

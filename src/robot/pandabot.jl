@@ -2,37 +2,40 @@ export PandaBot
 using PandaRobot
 include("../dynamics/pandadynamics.jl")
 
-using RigidBodySim
-using RigidBodyDynamics
+using PandaRobot, RigidBodySim, RigidBodyDynamics
 
 
 mutable struct PandaBot{T<:AbstractFloat} <: Robot
-  # Robot Properties
+  # Robot properties
   total_mass::T
+  num_joints::Int
   n_motors::Int
-  # J::Matrix{T}
-  # Jinv::Matrix{T}
-  # n_thrusters::Int
-  r::T
-  # hard_limit_vel::T
-  # hard_limit_accel::T 
-  # hard_limit_omega::T
-  # hard_limit_alpha::T
+  q_max::Vector{T}    # Joint limits
+  q_min::Vector{T}
+  qd_max::Vector{T}
+  qd_min::Vector{T}
+  qdd_max::Vector{T}
+  qdd_min::Vector{T}
+  qddd_max::Vector{T}
+  qddd_min::Vector{T}
+  tau_max::Vector{T}
+  tau_min::Vector{T}
+  taud_max::Vector{T}
+  taud_min::Vector{T}
+
+  # BulletPhysics struct
   btCollisionObject
 
-  # PandaRobot structure
-  pan#::Panda <: PandaRobot
+  # PandaRobot struct
+  pan
 
-  # Robot state
   q # joints # same as RigidBodyDynamics.configuration(state)
   q_dot
   q_ddot
   state # state (includes joints)
 
-  # Frame
   world_frame
 
-  # End effector
   EE_id::Int
   EE_link
   EE_link_frame
@@ -41,21 +44,23 @@ mutable struct PandaBot{T<:AbstractFloat} <: Robot
   EE_path
   EE_point3d_inWorldframe_limit_min
   EE_point3d_inWorldframe_limit_max
-  # EE_Jp
 end
 function PandaBot{T}() where T
-  # Robot Properties
   total_mass = 0.0
+  num_joints = 7
   n_motors = 9
-  # s = 0.5*0.305   # each side of cube is 30.5cm
-  r = sqrt(3)*0.5*0.305   # inflate to sphere
-  # hard_limit_vel = 0.5 
-  # hard_limit_accel = 0.1 
-  # hard_limit_omega = 45*pi/180 
-  # hard_limit_alpha = 50*pi/180 
-  # J = 0.1083*eye(3) 
-  # Jinv = inv(J)
-  btCollisionObject = BT.sphere(SVector{3}(zeros(T,3)), r) # Update this
+
+  # joint space limits: https://frankaemika.github.io/docs/control_parameters.html
+  q_max     = [2.8973; 1.7628; 2.8973; -0.0698; 2.8973; 3.7525; 2.8973]         # rad
+  q_min     = [-2.8973; -1.7628; -2.8973; -3.0718; -2.8973; -0.0175; -2.8973]   # rad
+  qd_max    = [2.1750; 2.1750; 2.1750; 2.1750; 2.6100; 2.6100; 2.6100]          # rad/s
+  qdd_max   = [15;  7.5; 10; 12.5; 15; 20; 20]                                  # rad/s^2
+  qddd_max  = [7500; 3750; 5000; 6250; 7500; 10000; 10000]                      # rad/s^3
+  tau_max   = [87; 87; 87; 87; 12; 12; 12]                                      # N*m
+  taud_max  = [1000; 1000; 1000; 1000; 1000; 1000; 1000]                        # N*m/s
+
+  # TODO(acauligi): Instantiate Bullet representation correctly
+  btCollisionObject = BulletCollision.sphere(SVector{3}(zeros(T,3)), 0.5)
 
   # PandaRobot structure
   # Note that it includes the definition of all the links and their relative definition
@@ -85,31 +90,20 @@ function PandaBot{T}() where T
     set_configuration!(state,q0)
     lims_up = RigidBodyDynamics.transform(state, EE_link_point, world_frame)
   EE_point3d_inWorldframe_limit_min, EE_point3d_inWorldframe_limit_max = -maximum(lims_up.v)*ones(3), maximum(lims_up.v)*ones(3)
-  # Jacobian (joints to point)
-  # EE_Jp = point_jacobian(state, EE_path, RigidBodyDynamics.transform(state, EE_link_point, world_frame))  )
 
-  # new PandaBot instance
-  return PandaBot{T}(total_mass,n_motors,r,btCollisionObject,pan,q,q_dot,q_ddot,state,world_frame,
+  # Jacobian (joints to point)
+  # EE_Jp = point_jacobian(state, EE_path, RigidBodyDynamics.transform(state, EE_link_point, world_frame))
+
+  return PandaBot{T}(total_mass,num_joints,n_motors,
+    q_max,q_min,qd_max,-qd_max,
+    qdd_max,-qdd_max,qddd_max,-qddd_max,
+    tau_max,-tau_max,taud_max,-taud_max,
+    btCollisionObject,pan,
+    q,q_dot,q_ddot,state,world_frame,
     EE_id, EE_link, EE_link_frame, EE_link_point, EE_link_radius, EE_path, 
     EE_point3d_inWorldframe_limit_min, EE_point3d_inWorldframe_limit_max)
-  # return PandaBot{T}(total_mass,n_motors,pan,q,state)
 end
 PandaBot(::Type{T} = Float64; kwargs...) where {T} = PandaBot{T}(; kwargs...)
-
-
-##################
-# Initializations
-##################
-# Careful, x_init, x_goal are in configuration space!
-function init_traj_straightline(TOP::TrajectoryOptimizationProblem{PandaBot{T}, PandaDyn, E}) where {T,E}
-  model, x_init, x_goal = TOP.PD.model, TOP.PD.x_init, TOP.PD.x_goal
-  x_dim, u_dim, N, tf_guess = model.x_dim, model.u_dim, TOP.N, TOP.tf_guess
-  N = TOP.N
-
-  X = hcat(linspace(x_init, x_goal, N)...)
-  U = zeros(u_dim, N)
-  Trajectory(X, U, tf_guess)
-end
 
 
 ##################
@@ -125,6 +119,7 @@ end
 function get_torques(manipulator::PandaBot)
   inverse_dynamics(manipulator.state, manipulator.q_dot)
 end
+
 
 ##################
 # Update Values
