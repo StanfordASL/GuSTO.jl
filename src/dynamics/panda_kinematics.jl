@@ -216,16 +216,16 @@ function ncse_unit_norm_constraints(traj, traj_prev::Trajectory, SCPP::SCPProble
 end
 
 ## Nonconvex state inequality constraints
-function ncsi_obstacle_avoidance_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{PandaBot{T}, PandaKin, E}, k::Int, i::Int) where {T,E}
+function ncsi_obstacle_avoidance_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{PandaBot{T}, PandaKin, E}, k::Int, j::Int, i::Int) where {T,E}
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_PandaKin(traj, traj_prev, SCPP)
 
-  rb_idx, env_idx = 1, i
+  rb_idx, env_idx = j, i
   env_ = WS.btenvironment_keepout
 
   clearance = model.clearance 
 
-  # TODO(acauligi): forward kinematics get r for the current obstacle shape
-  r = rand(3) 
+  RigidBodyDynamics.set_configuration!(robot.state, get_configuration(X[:,k],model))
+  r = get_bubble_position(robot.bubble_array[rb_idx],SCPP)
 
   dist,xbody,xobs = BulletCollision.distance(env_,rb_idx,r,env_idx)
 
@@ -235,8 +235,12 @@ end
 function ncsi_EE_goal_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem, k::Int, i::Int)
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_PandaKin(traj, traj_prev, SCPP)
 
-  p_EE_goal = get_EE_position(x_goal, SCPP)
-  p_EE      = get_EE_position(X[:,N], SCPP)
+
+  RigidBodyDynamics.set_configuration!(robot.state, get_configuration(x_goal,model))
+  p_EE_goal = get_EE_position(SCPP)
+
+  RigidBodyDynamics.set_configuration!(robot.state, get_configuration(X[:,N],model))
+  p_EE      = get_EE_position(SCPP)
 
   return p_EE[i] - p_EE_goal[i] - model.goal_position_EE_delta_error
 end
@@ -244,8 +248,11 @@ end
 function ncsi_EE_goal_constraints_negative(traj, traj_prev::Trajectory, SCPP::SCPProblem, k::Int, i::Int)
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_PandaKin(traj, traj_prev, SCPP)
 
-  p_EE_goal = get_EE_position(x_goal, SCPP)
-  p_EE      = get_EE_position(X[:,N], SCPP)
+  RigidBodyDynamics.set_configuration!(robot.state, get_configuration(x_goal,model))
+  p_EE_goal = get_EE_position(SCPP)
+
+  RigidBodyDynamics.set_configuration!(robot.state, get_configuration(X[:,N],model))
+  p_EE      = get_EE_position(SCPP)
 
   return -( p_EE[i] - p_EE_goal[i] ) - model.goal_position_EE_delta_error
 end
@@ -259,26 +266,38 @@ function ncse_unit_norm_constraints_convexified(traj, traj_prev::Trajectory, SCP
 end
 
 ## Nonconvex state inequality constraints (convexified)
-function ncsi_obstacle_avoidance_constraints_convexified(traj, traj_prev::Trajectory, SCPP::SCPProblem{PandaBot{T}, PandaKin, E}, k::Int, i::Int) where {T,E}
+function ncsi_obstacle_avoidance_constraints_convexified(traj, traj_prev::Trajectory, SCPP::SCPProblem{PandaBot{T}, PandaKin, E}, k::Int, j::Int, i::Int) where {T,E}
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_PandaKin(traj, traj_prev, SCPP)
 
-  rb_idx, env_idx = 1, i
+  rb_idx, env_idx = j, i
   env_ = WS.btenvironment_keepout
-
   clearance = model.clearance
 
-  r0 = get_workspace_location(traj_prev, SCPP, k)
+  Xq,Xq0 = X[:,k], Xp[:,k]
+
+  RigidBodyDynamics.set_configuration!(robot.state, get_configuration(Xq0,model))
+  r0 = get_bubble_position(robot.bubble_array[rb_idx],SCPP)
   dist, xbody, xobs = BulletCollision.distance(env_, rb_idx, r0, env_idx)
 
-  if dist < SCPP.param.obstacle_toggle_distance
-    r = get_workspace_location(traj, SCPP, k)
+  # J_joint = dr/dq
+  J_joint = get_bubble_jacobian(robot.bubble_array[rb_idx],SCPP)
+  
+  # J_embedding = dq/dx
+  J_embedding = zeros(model.num_joints,model.x_dim)
+  for i in 1:model.num_joints
+    sum_squares = sqrt(Xq0[2*i-1]*Xq0[2*i-1] + Xq0[2*i]*Xq0[2*i])   # TODO(acauligi): should this be set to 1?
+    J_embedding[i,2*i-1:2*i] = [-Xq0[2*i]; Xq0[2*i-1]]/sum_squares
+  end
 
+  J = J_joint * J_embedding
+
+  if dist < SCPP.param.obstacle_toggle_distance
     # See Eq. 12b in "Convex optimization for proximity maneuvering of a spacecraft with a robotic manipulator"
     nhat = dist > 0 ?
       (xbody-xobs)./norm(xbody-xobs) :
       (xobs-xbody)./norm(xobs-xbody)
 
-    return (clearance - (dist + nhat'*(r-r0)))
+    return (clearance - (dist + nhat'*J*(Xq-Xq0)))
   else
     return 0.
   end
@@ -286,10 +305,13 @@ end
 
 function ncsi_EE_goal_constraints_convexified(traj, traj_prev::Trajectory, SCPP::SCPProblem, k::Int, i::Int)
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_PandaKin(traj, traj_prev, SCPP)
+  
+  RigidBodyDynamics.set_configuration!(robot.state, get_configuration(x_goal,model))
+  p_EE_goal = get_EE_position(SCPP)
 
-  p_EE_goal = get_EE_position(x_goal, SCPP)
-  p_EE      = get_EE_position(Xp[:,N], SCPP)
-  J_p_EE    = get_EE_Jacobian(Xp[:,N], SCPP)
+  RigidBodyDynamics.set_configuration!(robot.state, get_configuration(Xp[:,N],model))
+  p_EE      = get_EE_position(SCPP)
+  J_p_EE    = get_EE_jacobian(Xp[:,N],SCPP)
 
   return p_EE[i] + transpose(J_p_EE[i,:]) * (X[:,N]-Xp[:,N]) - p_EE_goal[i] - model.goal_position_EE_delta_error
 end
@@ -297,9 +319,12 @@ end
 function ncsi_EE_goal_constraints_negative_convexified(traj, traj_prev::Trajectory, SCPP::SCPProblem, k::Int, i::Int)
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_PandaKin(traj, traj_prev, SCPP)
 
-  p_EE_goal = get_EE_position(x_goal, SCPP)
-  p_EE      = get_EE_position(Xp[:,N], SCPP)
-  J_p_EE    = get_EE_Jacobian(Xp[:,N], SCPP)
+  RigidBodyDynamics.set_configuration!(robot.state, get_configuration(x_goal,model))
+  p_EE_goal = get_EE_position(SCPP)
+
+  RigidBodyDynamics.set_configuration!(robot.state, get_configuration(Xp[:,N],model))
+  p_EE      = get_EE_position(SCPP)
+  J_p_EE    = get_EE_jacobian(Xp[:,N],SCPP)
 
   return -( p_EE[i] + transpose(J_p_EE[i,:]) * (X[:,N]-Xp[:,N]) - p_EE_goal[i] ) - model.goal_position_EE_delta_error
 end
@@ -318,11 +343,11 @@ end
 
 function get_workspace_location(traj, SCPP::SCPProblem{PandaBot{T}, PandaKin, E}, k::Int, i::Int=0) where {T,E}
   # TODO(acauligi): need a way to query workspace position for a given collision object along kinematic chain
-  return get_EE_position(traj.X[:,k], SCPP)
+  return nothing 
 end
 
 function SCPConstraints(SCPP::SCPProblem{PandaBot{T}, PandaKin, E}) where {T,E}
-  model = SCPP.PD.model
+  robot, model = SCPP.PD.robot, SCPP.PD.model
   x_dim, u_dim, N = model.x_dim, model.u_dim, SCPP.N
   WS = SCPP.WS
 
@@ -360,8 +385,8 @@ function SCPConstraints(SCPP::SCPProblem{PandaBot{T}, PandaKin, E}) where {T,E}
 
   ## Nonconvex state inequality constraints
   env_ = WS.btenvironment_keepout
-  for k = 1:N, i = 1:length(env_.convex_env_components)
-    push!(SCPC.nonconvex_state_ineq, (ncsi_obstacle_avoidance_constraints, k, i))
+  for k = 1:N, j = 1:length(robot.bubble_array), i = 1:length(env_.convex_env_components)
+    push!(SCPC.nonconvex_state_ineq, (ncsi_obstacle_avoidance_constraints, k, j, i))
   end
 
   for i = 1:3
@@ -376,8 +401,8 @@ function SCPConstraints(SCPP::SCPProblem{PandaBot{T}, PandaKin, E}) where {T,E}
 
   ## Nonconvex state inequality constraints (convexified)
   env_ = WS.btenvironment_keepout
-  for k = 1:N, i = 1:length(env_.convex_env_components)
-    push!(SCPC.nonconvex_state_convexified_ineq, (ncsi_obstacle_avoidance_constraints_convexified, k, i))
+  for k = 1:N, j=1:length(robot.bubble_array), i = 1:length(env_.convex_env_components)
+    push!(SCPC.nonconvex_state_convexified_ineq, (ncsi_obstacle_avoidance_constraints_convexified, k, j, i))
   end
 
   for i = 1:3
@@ -406,18 +431,36 @@ function trust_region_ratio_gusto(traj, traj_prev::Trajectory, SCPP::SCPProblem{
     num += norm(f_dyn(X[:,k],U[:,k],robot,model) - linearized)
     den += norm(linearized)
   end
-
+  
   clearance = model.clearance 
   for k in 1:N
-    r0 = get_workspace_location(traj, SCPP, k)
-    r = get_workspace_location(traj_prev, SCPP, k)
+    Xq,Xq0 = X[:,k], Xp[:,k]
+    
     for (rb_idx,body_point) in enumerate(env_.convex_robot_components)
+      RigidBodyDynamics.set_configuration!(robot.state, get_configuration(Xq,model))
+      r = get_bubble_position(robot.bubble_array[rb_idx],SCPP)
+
+      RigidBodyDynamics.set_configuration!(robot.state, get_configuration(Xq0,model))
+
+      # J_joint = dr/dq
+      J_joint = get_bubble_jacobian(robot.bubble_array[rb_idx],SCPP)
+      
+      # J_embedding = dq/dx
+      J_embedding = zeros(model.num_joints,model.x_dim)
+      for i in 1:model.num_joints
+        sum_squares = sqrt(Xq0[2*i-1]*Xq0[2*i-1] + Xq0[2*i]*Xq0[2*i])   # TODO(acauligi): should this be set to 1?
+        J_embedding[i,2*i-1:2*i] = [-Xq0[2*i]; Xq0[2*i-1]]/sum_squares
+      end
+      
+      J = J_joint * J_embedding
+
       for (env_idx,convex_env_component) in enumerate(env_.convex_env_components)
-        dist,xbody,xobs = BulletCollision.distance(env_,rb_idx,r0,env_idx)
+        r0 = get_bubble_position(robot.bubble_array[rb_idx],SCPP)
+        dist, xbody, xobs = BulletCollision.distance(env_, rb_idx, r0, env_idx)
         nhat = dist > 0 ?
           (xbody-xobs)./norm(xbody-xobs) :
           (xobs-xbody)./norm(xobs-xbody) 
-        linearized = clearance - (dist + nhat'*(r-r0))
+        linearized = clearance - (dist + nhat'*J*(X-X0))
         
         dist,xbody,xobs = BulletCollision.distance(env_,rb_idx,r,env_idx)
 
@@ -428,10 +471,15 @@ function trust_region_ratio_gusto(traj, traj_prev::Trajectory, SCPP::SCPProblem{
   end
 
   # Final EE constraint
-  p_EE_goal     = get_EE_position(x_goal, SCPP)
-  p_EE_curF     = get_EE_position(X[:,N],  SCPP)
-  p_EE_prevF    = get_EE_position(Xp[:,N], SCPP)
-  J_p_EE_prevF  = get_EE_Jacobian(Xp[:,N], SCPP)
+  RigidBodyDynamics.set_configuration!(robot.state, get_configuration(x_goal,model))
+  p_EE_goal     = get_EE_position(SCPP)
+
+  RigidBodyDynamics.set_configuration!(robot.state, get_configuration(X[:,N],model))
+  p_EE_curF     = get_EE_position(SCPP)
+  
+  RigidBodyDynamics.set_configuration!(robot.state, get_configuration(Xp[:,N],model))
+  p_EE_prevF    = get_EE_position(SCPP)
+  J_p_EE_prevF  = get_EE_jacobian(Xp[:,N],SCPP)
 
   num += norm( (p_EE_goal-p_EE_curF) - (p_EE_goal-p_EE_prevF - J_p_EE_prevF*(X[:,N]-Xp[:,N])) )
   den += norm(                         (p_EE_goal-p_EE_prevF - J_p_EE_prevF*(X[:,N]-Xp[:,N])) )
@@ -506,6 +554,20 @@ function dynamics_constraint_satisfaction(traj::Trajectory, SCPP::SCPProblem{Pan
   return J
 end
 
+function verify_joint_limits(traj::Trajectory, SCPP::SCPProblem{PandaBot{T}, PandaKin, E}) where {T,E}
+  N, robot, model = SCPP.N, SCPP.PD.robot, SCPP.PD.model
+
+  q_min, q_max = robot.q_min, robot.q_max
+  for idx in 1:N
+    q = get_configuration(traj.X[:,idx],SCPP)
+    if any((q.<q_min) .| (q.>q_max))
+      return false
+    end
+  end
+
+  return true
+end
+
 function verify_collision_free(traj::Trajectory, SCPP::SCPProblem{PandaBot{T}, PandaKin, E}) where {T,E}
   model, WS = SCPP.PD.model, SCPP.WS
   N = SCPP.N
@@ -537,38 +599,58 @@ function get_configuration(X, model::PandaKin)
 end
 get_configuration(X,SCPP::SCPProblem) = get_configuration(X,SCPP.PD.model)
 
-function get_EE_position(X, SCPP::SCPProblem)
+function get_EE_position(SCPP::SCPProblem)
   N, robot, model = SCPP.N, SCPP.PD.robot, SCPP.PD.model
-  pan = robot.pan
 
-  q = get_configuration(X,SCPP)
-  set_configuration!(robot.state,q)
   p_EE = RigidBodyDynamics.Spatial.transform(robot.state, robot.EE_link_point, robot.world_frame)
   p_EE = p_EE.v
 
   return p_EE
 end
 
-function get_EE_Jacobian(X, SCPP::SCPProblem)
+function get_EE_jacobian(X,SCPP::SCPProblem)
   N, robot, model = SCPP.N, SCPP.PD.robot, SCPP.PD.model
-  pd = robot.pan
 
+  # J = dr/dx = dr/dq * dq/dx
   J_p_EE = zeros(3,model.x_dim)
 
   # J_pEE_joint = dr/dq
-  q = get_configuration(X,SCPP)
-  set_configuration!(robot.state,q)
   J_pEE_joint = point_jacobian(robot.state,robot.EE_path, RigidBodyDynamics.Spatial.transform(robot.state,robot.EE_link_point,robot.world_frame))
   J_pEE_joint = J_pEE_joint.J[:,1:model.num_joints]
 
   # J_pEE_embedding = dq/dx
   J_pEE_embedding = zeros(model.num_joints,model.x_dim)
   for i in 1:model.num_joints
-    sum_squares = sqrt(X[2*i-1]*X[2*i-1] + X[2*i]*X[2*i])   # TODO(acauligi): does this equal 1?
+    sum_squares = sqrt(X[2*i-1]*X[2*i-1] + X[2*i]*X[2*i])   # TODO(acauligi): should this be set to 1?
     J_pEE_embedding[i,2*i-1:2*i] = [-X[2*i]; X[2*i-1]]/sum_squares
   end
 
-  # J = dr/dx = dr/dq * dq/dx
   J_pEE = J_pEE_joint * J_pEE_embedding
   return J_p_EE
+end
+
+function get_bubble_position(bubble::panda_bubble, SCPP::SCPProblem)
+  N, robot, model = SCPP.N, SCPP.PD.robot, SCPP.PD.model
+  pd = robot.pan
+  
+  link = RigidBodyDynamics.bodies(pd.mechanism)[bubble.parent_id]
+  link_frame = RigidBodyDynamics.default_frame(link)
+  link_point = RigidBodyDynamics.Point3D(link_frame,bubble.local_pose)
+  path = RigidBodyDynamics.path(pd.mechanism, root_body(pd.mechanism),link)
+  p_bubble = RigidBodyDynamics.transform(robot.state, link_point, robot.world_frame)
+  return p_bubble.v
+end
+
+function get_bubble_jacobian(bubble::panda_bubble, SCPP::SCPProblem)
+  N, robot, model = SCPP.N, SCPP.PD.robot, SCPP.PD.model
+  pd = robot.pan
+
+  link = RigidBodyDynamics.bodies(pd.mechanism)[bubble.parent_id]
+  link_frame = RigidBodyDynamics.default_frame(link)
+  link_point = RigidBodyDynamics.Point3D(link_frame,bubble.local_pose)
+  path = RigidBodyDynamics.path(pd.mechanism, root_body(pd.mechanism),link)
+
+  J_pEE_joint = point_jacobian(robot.state,path, RigidBodyDynamics.Spatial.transform(robot.state,link_point,robot.world_frame))
+  J_pEE_joint = J_pEE_joint.J[:,1:model.num_joints]
+  return J_pEE_joint
 end

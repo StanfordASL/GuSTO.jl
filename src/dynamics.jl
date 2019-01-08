@@ -7,7 +7,7 @@ include("dynamics/astrobee_se3_manifold.jl")
 include("dynamics/airplane.jl")
 include("dynamics/dubins_car.jl")
 include("dynamics/doubleint_r2.jl")
-include("dynamics/pandaKin.jl")
+include("dynamics/panda_kinematics.jl")
 
 macro constraint_abbrev(traj, traj_prev, SCPP)
 	quote
