@@ -155,9 +155,9 @@ function dynamics_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astr
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_AstrobeeSE3Manifold(traj, traj_prev, SCPP)
   fp, Ap, Bp = get_f(k, model), get_A(k, model), get_B(k, model)
   if k == N-1
-    return Tf*fp + Tfp*(Ap*(X[:,k]-Xp[:,k]) + Bp*(U[:,k]-Up[:,k])) - (X[:,k+1]-X[:,k])/dh
+    return Tf.*fp + Tfp*(Ap*(X[:,k]-Xp[:,k]) + Bp*(U[:,k]-Up[:,k])) - (X[:,k+1]-X[:,k])/dh
   else
-    return 0.5*(Tf*(fp + get_f(k+1, model)) + Tfp*(Ap*(X[:,k]-Xp[:,k]) + Bp*(U[:,k]-Up[:,k])) +
+    return 0.5*(Tf.*(fp + get_f(k+1, model)) + Tfp*(Ap*(X[:,k]-Xp[:,k]) + Bp*(U[:,k]-Up[:,k])) +
       Tfp*(Ap*(X[:,k+1]-Xp[:,k+1]) + Bp*(U[:,k+1]-Up[:,k+1]))) - (X[:,k+1]-X[:,k])/dh
   end
 end
@@ -177,7 +177,7 @@ end
 
 function update_f!(f, x::Vector, u::Vector, robot::Robot, model::AstrobeeSE3Manifold)
   r, v, w = x[1:3], x[4:6], x[11:13]
-  qx, qy, qz, qw = x[7:10] 
+  qx, qy, qz, qw = x[7:10]
   wx, wy, wz = x[11:13]
   F, M = u[1:3], u[4:6]
 

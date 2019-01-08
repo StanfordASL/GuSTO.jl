@@ -20,7 +20,8 @@ using StaticArrays
 using StaticArrays.FixedSizeArrays
 using JuMP, Convex
 using Ipopt, Mosek, SCS
-# using Gurobi
+using MathOptInterfaceMosek
+using Gurobi
 using MathProgBase, MathOptInterface
 using NLsolve, DifferentialEquations
 

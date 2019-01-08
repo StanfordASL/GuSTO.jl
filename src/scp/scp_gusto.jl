@@ -89,18 +89,40 @@ function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Ipopt", 
 		time_start = time_ns()
 
 		# Set up, solve problem
-		SCPS.solver_model = Model()
+		# SCPS.solver_model = Model(with_optimizer(SCS.Optimizer))
+		# SCPS.solver_model = Model(with_optimizer(MosekOptimizer))
+		SCPS.solver_model = Model(with_optimizer(Ipopt.Optimizer))
 		update_model_params!(SCPP, SCPS.traj)
 		add_variables_jump!(SCPS, SCPV, SCPP)
 		add_objective_gusto_jump!(SCPS, SCPV, SCPC, SCPP)
 		add_constraints_gusto_jump!(SCPS, SCPV, SCPC, SCPP)
-		setvalue.(SCPV.X, SCPS.traj.X)
-		setvalue.(SCPV.U, SCPS.traj.U)
-		JuMP.solve(SCPS.solver_model)
+		# @show SCPV.X[2,4]
+		# @show typeof(SCPV.X[2,4])
+		# @show SCPV.X[2,4].index
+		# set_start_value(SCPV.X[2,4], 1.0)
+
+		# model = SCPP.PD.model
+  # 	x_dim, u_dim = model.x_dim, model.u_dim
+
+		# @variable(SCPS.solver_model, X[1:x_dim, 1:N])
+		# @variable(SCPS.solver_model, U[1:u_dim, 1:N])
+		# @variable(SCPS.solver_model, Tf)
+
+		# SCPP.param.fixed_final_time ? JuMP.fix(Tf, SCPP.tf_guess) : nothing
+
+		# SCPV.X, SCPV.U, SCPV.Tf = X, U, Tf
+		# set_start_value(SCPV.X[2,4], 1.0)
+		# set_start_value.(SCPV.X, SCPS.traj.X)
+		# set_start_value.(SCPV.U, SCPS.traj.U)
+		
+
+		# set_start_value.(SCPV.X, SCPS.traj.X)
+		# set_start_value.(SCPV.U, SCPS.traj.U)
+		JuMP.optimize!(SCPS.solver_model)
 		first_time = false
 
-		@show get_status_jump(SCPS, SCPP)
-		push!(SCPS.prob_status, get_status_jump(SCPS, SCPP))
+		@show termination_status(SCPS, SCPP)
+		push!(SCPS.prob_status, termination_status(SCPS, SCPP))
 		if SCPS.prob_status[end] != :Optimal
 		  warn("GuSTO SCP iteration failed to find an optimal solution")
 		  push!(SCPS.iter_elapsed_times, (time_ns() - time_start)/10^9) 
@@ -291,7 +313,7 @@ function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", m
 
 		# Set up, solve problem
 		update_model_params!(SCPP, SCPS.traj)
-		prob.objective = cost_full_convexified_gusto(SCPV, SCPS.traj, SCPC, SCPP)
+		prob.objective = cost_full_convexified_gusto_cvx(SCPV, SCPS.traj, SCPC, SCPP)
 		prob.constraints = add_constraints_gusto_cvx(SCPV, SCPS.traj, SCPC, SCPP)
 		Convex.solve!(prob, default_solver, warmstart=!first_time)
 		first_time = false
