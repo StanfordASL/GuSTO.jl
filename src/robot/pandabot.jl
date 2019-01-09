@@ -1,6 +1,5 @@
 export PandaBot
 using PandaRobot
-include("../dynamics/pandadynamics.jl")
 
 using PandaRobot, RigidBodySim, RigidBodyDynamics
 
