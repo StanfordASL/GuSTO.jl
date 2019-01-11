@@ -30,6 +30,8 @@ using GeometryTypes
 using FillArrays
 using LinearAlgebra
 
+const MOI = MathOptInterface
+
 include("types.jl")
 
 include("traj_opt.jl")

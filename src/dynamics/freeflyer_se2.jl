@@ -2,7 +2,7 @@ export FreeflyerSE2
 export init_traj_straightline, init_traj_geometricplan
 
 mutable struct FreeflyerSE2 <: DynamicsModel
-  # state: r v p omega
+  # state: r v p ω
   x_dim
   u_dim
   clearance
@@ -215,7 +215,7 @@ end
 
 function csi_angular_velocity_bound(traj, traj_prev::Trajectory, SCPP::SCPProblem{Freeflyer{T}, FreeflyerSE2, E}, k::Int, i::Int) where {T,E}
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_freeflyerSE2(traj, traj_prev, SCPP)
-  return norm(X[6,k]) - robot.hard_limit_omega
+  return norm(X[6,k]) - robot.hard_limit_ω
 end
 
 ## Convex control inequality constraints

@@ -9,8 +9,6 @@ mutable struct AstrobeeSE3Manifold <: DynamicsModel
 
   x_min
   x_max
-  u_min
-  u_max
 
   # Parameters that can be updated
   f::Vector
@@ -25,10 +23,8 @@ function AstrobeeSE3Manifold()
 
   x_max = 1e3*ones(x_dim)
   x_min = -x_max
-  u_max = 1e1*ones(u_dim)
-  u_min = -u_max
 
-  AstrobeeSE3Manifold(x_dim, u_dim, clearance, x_min, x_max, u_min, u_max, [], [], [])
+  AstrobeeSE3Manifold(x_dim, u_dim, clearance, x_min, x_max, [], [], [])
 end
 
 function SCPParam(model::AstrobeeSE3Manifold, fixed_final_time::Bool)
@@ -59,7 +55,7 @@ function SCPParam_Mao(model::AstrobeeSE3Manifold)
 end
 
 function SCPParam_TrajOpt(model::AstrobeeSE3Manifold)
-  mu0 = 1.
+  μ0 = 1.
   s0 = 10.
   c = 10.
   τ_plus = 2. 
@@ -72,7 +68,7 @@ function SCPParam_TrajOpt(model::AstrobeeSE3Manifold)
   max_convex_iteration = 5
   max_trust_iteration = 5
 
-  SCPParam_TrajOpt(mu0, s0, c, τ_plus, τ_minus, k, ftol, xtol, ctol,max_penalty_iteration,max_convex_iteration,max_trust_iteration)
+  SCPParam_TrajOpt(μ0, s0, c, τ_plus, τ_minus, k, ftol, xtol, ctol, max_penalty_iteration, max_convex_iteration, max_trust_iteration)
 end
 
 ######
@@ -84,7 +80,7 @@ function cost_true(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, 
   U,N = traj.U, SCPP.N
   Jm = 0
   for k in 1:N-1
-    #Jm += norm(U[:,k])^2
+    # Jm += norm(U[:,k])^2
     Jm += sum(U[j,k]^2 for j = 1:u_dim)
   end
   Jm += traj.Tf^2
@@ -104,7 +100,7 @@ function init_traj_straightline(TOP::TrajectoryOptimizationProblem{Astrobee3D{T}
   N = TOP.N
 
   X = hcat(range(x_init, stop=x_goal, length=N)...)
-  U = zeros(u_dim, N)
+  U = zeros(u_dim, N-1)
   Trajectory(X, U, tf_guess)
 end
 
@@ -547,8 +543,11 @@ function get_dual_cvx(prob::Convex.Problem, SCPP::SCPProblem{Astrobee3D{T}, Astr
 	end
 end
 
-function get_dual_jump(SCPS::SCPSolution, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}) where {T,E}
-	@show -MathProgBase.getconstrduals(SCPS.solver_model.internalModel)[1:SCPP.PD.model.x_dim]
+function get_dual_jump(SCPC::SCPConstraints, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}) where {T,E}
+  @show "test"
+  @show JuMP.dual(SCPC.convex_state_eq[:cse_init_constraints].con_reference[1])
+  @show "test2"
+	JuMP.dual.(SCPC.convex_state_eq[:cse_init_constraints].con_reference)
 end
 function get_status_jump(SCPS::SCPSolution, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}) where {T,E}
   MathProgBase.status(SCPS.solver_model.internalModel)
@@ -631,16 +630,6 @@ end
 #######
 # JuMP
 #######
-function cost(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}) where {T,E}
-  U,N = traj.U, SCPP.N
-  dtp = traj_prev.dt
-  Jm = 0
-  for k in 1:N-1
-    Jm += dtp*norm(U[:,k])^2
-  end
-  Jm += traj.Tf^2
-  return Jm
-end
 
 function add_objective!(solver_model::Model, SCPV::SCPVariables, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}) where {T,E}
   robot, model = SCPP.PD.robot, SCPP.PD.model
@@ -649,9 +638,7 @@ function add_objective!(solver_model::Model, SCPV::SCPVariables, SCPP::SCPProble
   U = SCPV.U
   N, dt = SCPP.N, SCPP.tf_guess/SCPP.N
 
-  for i = 1:u_dim
-    @NLobjective(solver_model, Min, sum(dt*U[i,k]^2 for k = 1:N-1))
-  end
+  @NLobjective(solver_model, Min, sum(dt*U[i,k]^2 for i = 1:u_dim, k = 1:N-1))
 end
 
 function add_constraints!(solver_model::Model, SCPV::SCPVariables, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}) where {T,E}
@@ -662,12 +649,8 @@ function add_constraints!(solver_model::Model, SCPV::SCPVariables, traj_prev::Tr
   x_dim, u_dim, N, dh = model.x_dim, model.u_dim, SCPP.N, SCPP.dh
   WS = SCPP.WS
   
-  @constraint(solver_model, SCPV.Tf == Tfp )
-
   # Init (add these first for shooting method!)
   for i = 1:x_dim
-    # @constraint(solver_model, X[i,1] == x_init[i])
-    #@constraint(solver_model, 0. == cse_init_constraints_jump(SCPV, traj_prev, SCPP, 0, i) )
     @constraint(solver_model, 0. == cse_init_constraints(SCPV, traj_prev, SCPP, 0, i) )
   end
   # Goal

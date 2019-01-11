@@ -61,7 +61,7 @@ function SCPParam_TrajOpt(model::AstrobeeSE3)
   max_convex_iteration = 5
   max_trust_iteration = 5
 
-  SCPParam_TrajOpt(μ0, s0, c, τ_plus, τ_minus, k, ftol, xtol, ctol,max_penalty_iteration,max_convex_iteration,max_trust_iteration)
+  SCPParam_TrajOpt(μ0, s0, c, τ_plus, τ_minus, k, ftol, xtol, ctol, max_penalty_iteration, max_convex_iteration, max_trust_iteration)
 end
 
 ######
@@ -90,7 +90,7 @@ function init_traj_straightline(TOP::TrajectoryOptimizationProblem{Astrobee3D{T}
   N = TOP.N
 
   X = hcat(range(x_init, stop=x_goal, length=N)...)
-  U = zeros(u_dim, N)
+  U = zeros(u_dim, N-1)
   Trajectory(X, U, tf_guess)
 end
 
@@ -314,22 +314,22 @@ function SCPConstraints(SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3, E}) where {
 
   ## Dynamics constraints
   for k = 1:N-1
-    push!(SCPC.dynamics, (dynamics_constraints, k, 0))
+    push!(SCPC.functions.dynamics, (dynamics_constraints, k, 0))
   end
 
   ## Convex state equality constraints
   # Init and goal (add init first for convenience of getting dual)
   for i = 1:x_dim
-    push!(SCPC.convex_state_eq, (cse_init_constraints, 0, i))
+    push!(SCPC.functions.convex_state_eq, (cse_init_constraints, 0, i))
   end
   for i = 1:x_dim
-    push!(SCPC.convex_state_eq, (cse_goal_constraints, 0, i))
+    push!(SCPC.functions.convex_state_eq, (cse_goal_constraints, 0, i))
   end
 
   ## Convex state inequality constraints
   for k = 1:N
-    push!(SCPC.convex_state_ineq, (csi_translational_velocity_bound, k, 0))
-    push!(SCPC.convex_state_ineq, (csi_angular_velocity_bound, k, 0))
+    push!(SCPC.functions.convex_state_ineq, (csi_translational_velocity_bound, k, 0))
+    push!(SCPC.functions.convex_state_ineq, (csi_angular_velocity_bound, k, 0))
   end
 
   ## Nonconvex state equality constraints
@@ -338,7 +338,7 @@ function SCPConstraints(SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3, E}) where {
   ## Nonconvex state inequality constraints
   env_ = WS.btenvironment_keepout
   for k = 1:N, i = 1:length(env_.convex_env_components)
-    push!(SCPC.nonconvex_state_ineq, (ncsi_obstacle_avoidance_constraints, k, i))
+    push!(SCPC.functions.nonconvex_state_ineq, (ncsi_obstacle_avoidance_constraints, k, i))
   end
 
   ## Nonconvex state equality constraints (convexified)
@@ -347,7 +347,7 @@ function SCPConstraints(SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3, E}) where {
   ## Nonconvex state inequality constraints (convexified)
   env_ = WS.btenvironment_keepout
   for k = 1:N, i = 1:length(env_.convex_env_components)
-    push!(SCPC.nonconvex_state_convexified_ineq, (ncsi_obstacle_avoidance_constraints_convexified, k, i))
+    push!(SCPC.functions.nonconvex_state_convexified_ineq, (ncsi_obstacle_avoidance_constraints_convexified, k, i))
   end
 
   ## Convex control equality constraints
@@ -355,18 +355,18 @@ function SCPConstraints(SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3, E}) where {
 
   ## Convex control inequality constraints
   for k = 1:N-1
-    push!(SCPC.convex_control_ineq, (cci_translational_accel_bound, k, 0))
-    push!(SCPC.convex_control_ineq, (cci_angular_accel_bound, k, 0))
+    push!(SCPC.functions.convex_control_ineq, (cci_translational_accel_bound, k, 0))
+    push!(SCPC.functions.convex_control_ineq, (cci_angular_accel_bound, k, 0))
   end
 
   ## State trust region ineqality constraints
   for k = 1:N
-    push!(SCPC.state_trust_region_ineq, (stri_state_trust_region, k, 0))
+    push!(SCPC.functions.state_trust_region_ineq, (stri_state_trust_region, k, 0))
   end
 
   ## Constrol trust region inequality constraints
   for k = 1:N-1
-    push!(SCPC.control_trust_region_ineq, (ctri_control_trust_region, k, 0))
+    push!(SCPC.functions.control_trust_region_ineq, (ctri_control_trust_region, k, 0))
   end
 
   return SCPC

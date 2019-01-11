@@ -52,15 +52,15 @@ function SCPParam_GuSTO(model::DubinsCar)
   SCPParam_GuSTO(Δ0, ω0, ω_max, ε, ρ0, ρ1, β_succ, β_fail, γ_fail)
 end
 
-######
-# CVX 
-######
+###########
+# Convex.jl 
+###########
 function cost_true(traj, traj_prev::Trajectory, SCPP::SCPProblem{Car, DubinsCar, E}) where E
 	U = traj.U
   N = SCPP.N
   dtp = traj_prev.dt 	# TODO(ambyld): Change to current trajectory dt?
 
-  return dtp*norm(U[1:N-1])^2
+  return dtp*sum(U[j]^2 for j = 1:N-1)
 end
 
 function cost_true_convexified(traj, traj_prev::Trajectory, SCPP::SCPProblem{Car, DubinsCar, E}) where E
@@ -75,7 +75,7 @@ function init_traj_nothing(TOP::TrajectoryOptimizationProblem{Car, DubinsCar, E}
 	x_dim, u_dim, N, tf_guess = model.x_dim, model.u_dim, TOP.N, TOP.tf_guess
 
 	X = repmat(0.5(x_init + x_goal),1,N)
-	U = zeros(u_dim,N)
+	U = zeros(u_dim,N-1)
 	Trajectory(X, U, tf_guess)
 end
 
@@ -84,7 +84,7 @@ function init_traj_straightline(TOP::TrajectoryOptimizationProblem{Car, DubinsCa
 	x_dim, u_dim, N, tf_guess = model.x_dim, model.u_dim, TOP.N, TOP.tf_guess
 
 	X = hcat(range(x_init, stop=x_goal, length=N)...)
-	U = zeros(u_dim,N)
+	U = zeros(u_dim,N-1)
 	Trajectory(X, U, tf_guess)
 end
 
@@ -124,28 +124,19 @@ macro constraint_abbrev_dubinscar(traj, traj_prev, SCPP)
 end
 
 ## Dynamics constraints
-function dynamics_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{Car, DubinsCar, E}, k::Int, i::Int) where E
+function dynamics_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{Car, DubinsCar, E}, k::Int) where E
 	# Where i is the state index, and k is the timestep index
 	X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_dubinscar(traj, traj_prev, SCPP)
 
 	fp, Ap, Bp = get_f(k, model), get_A(k, model), get_B(k, model)
-  Tf*fp + Tfp*(Ap*(X[:,k]-Xp[:,k]) + Bp*(U[k]-Up[k])) - (X[:,k+1]-X[:,k])/dh
+  # Tf.*fp + Tfp*(Ap*(X[:,k]-Xp[:,k]) + Bp*(U[k]-Up[k])) - (X[:,k+1]-X[:,k])/dh
 
-  # if k == N-1
-  #   return Tf*fp + Tfp*(Ap*(X[:,k]-Xp[:,k]) + Bp*(U[:,k]-Up[:,k])) - (X[:,k+1]-X[:,k])/dh
-  # else
-  #   return 0.5*(Tf*(fp + get_f(k+1, model)) + Tfp*(Ap*(X[:,k]-Xp[:,k]) + Bp*(U[:,k]-Up[:,k])) +
-  #     Tfp*(Ap*(X[:,k+1]-Xp[:,k+1]) + Bp*(U[:,k+1]-Up[:,k+1]))) - (X[:,k+1]-X[:,k])/dh
-  # end
-
-	# Ap = [0 0 model.v*(cos(Xp[3,k]) - sin(Xp[3,k]));
-  #	      0 0 model.v*(sin(Xp[3,k]) + cos(Xp[3,k]));
-  #	      0 0 0]
-  #	Bp = [0; 0; model.k]
-
- 	# Ap = A_dyn(Xp[:,k], model)
-  # Bp = B_dyn(model)
-  # X[:,k+1] - (X[:,k] + Tf*dh*(model.A[k]*(X[:,k]-Xp[:,k]) + model.B*U[k]))
+  if k == N-1
+    return Tf.*fp + Tfp*(Ap*(X[:,k]-Xp[:,k]) + Bp.*(U[:,k]-Up[:,k])) - (X[:,k+1]-X[:,k])/dh
+  else
+    return 0.5*(Tf.*(fp + get_f(k+1, model))  + Tfp*(Ap*(X[:,k]-Xp[:,k]) + Bp.*(U[:,k]-Up[:,k])) +
+      Tfp*(Ap*(X[:,k+1]-Xp[:,k+1]) + Bp.*(U[:,k+1]-Up[:,k+1]))) - (X[:,k+1]-X[:,k])/dh
+  end
 end
 
 # Get current dynamics structures for a particular time step
@@ -183,6 +174,10 @@ function B_dyn(x::Vector, robot::Robot, model::DubinsCar)
   [0; 0; model.k]
 end
 
+function add_constraint_category!(SCPCCat, func, dimtype, ind_time, ind_other...)
+	SCPCCat[Symbol(func)] = ConstraintCategory(func, dimtype, ind_time, ind_other)
+end
+
 ## Constructing full list of constraint functions
 function SCPConstraints(SCPP::SCPProblem{Car, DubinsCar, E}) where E
 	model = SCPP.PD.model
@@ -192,24 +187,16 @@ function SCPConstraints(SCPP::SCPProblem{Car, DubinsCar, E}) where E
 
 	## Convex state equality constraints
 	# Init and goal (add init first for convenience of getting dual)
-  for i = 1:x_dim
-    push!(SCPC.convex_state_eq, (cse_init_constraints, 0, i))
-  end
-  for i = 1:x_dim
-    push!(SCPC.convex_state_eq, (cse_goal_constraints, 0, i))
-  end
+	add_constraint_category!(SCPC.convex_state_eq, cse_init_constraints, :scalar, 0, 1:x_dim)
+	add_constraint_category!(SCPC.convex_state_eq, cse_goal_constraints, :scalar, 0, 1:x_dim)
 
   ## Dynamics constraints
-	for k = 1:N-1
-		push!(SCPC.dynamics, (dynamics_constraints, k, 0))
-	end
+  add_constraint_category!(SCPC.dynamics, dynamics_constraints, :array, 1:N-1)
 
 	## Convex state inequality constraints
 	# State bounds
-	for k = 1:N, i = 1:x_dim
-		push!(SCPC.convex_state_ineq, (csi_max_bound_constraints, k, i))
-		push!(SCPC.convex_state_ineq, (csi_min_bound_constraints, k, i))
-	end
+	add_constraint_category!(SCPC.convex_state_ineq, csi_max_bound_constraints, :scalar, 1:N, 1:x_dim)
+	add_constraint_category!(SCPC.convex_state_ineq, csi_min_bound_constraints, :scalar, 1:N, 1:x_dim)
 
 	## Nonconvex state equality constraints
 	## Nonconvex state inequality constraints
@@ -220,10 +207,8 @@ function SCPConstraints(SCPP::SCPProblem{Car, DubinsCar, E}) where E
 
 	## Convex control inequality constraints
 	# Control bounds
-	for k = 1:N-1
-		push!(SCPC.convex_control_ineq, (cci_max_bound_constraints, k, 1))
-		push!(SCPC.convex_control_ineq, (cci_min_bound_constraints, k, 1))
-	end
+	add_constraint_category!(SCPC.convex_control_ineq, cci_max_bound_constraints, :scalar, 1:N-1, 1)
+	add_constraint_category!(SCPC.convex_control_ineq, cci_min_bound_constraints, :scalar, 1:N-1, 1)
 
 	SCPC
 end
@@ -255,8 +240,8 @@ function get_dual_cvx(prob::Convex.Problem, SCPP::SCPProblem{Car, DubinsCar, E},
 	end
 end
 
-function get_dual_jump(SCPS::SCPSolution, SCPP::SCPProblem{Car, DubinsCar, E}) where E
-	-MathProgBase.getconstrduals(SCPS.solver_model.internalModel)[1:SCPP.PD.model.x_dim]
+function get_dual_jump(SCPC::SCPConstraints, SCPP::SCPProblem{Car, DubinsCar, E}) where E
+	JuMP.dual.([SCPC.convex_state_eq[:cse_init_constraints].con_reference[0,(i,)] for i = SCPC.convex_state_eq[:cse_init_constraints].ind_other[1]])
 end
 
 function model_ode!(xdot, x, SP::ShootingProblem{Car, DubinsCar, E}, t) where E
@@ -277,72 +262,66 @@ end
 #######
 # JuMP
 #######
-function cost(traj, traj_prev::Trajectory, SCPP::SCPProblem{Car, DubinsCar, E}) where E
-  U = traj.U
-  N = SCPP.N
-  dtp = traj_prev.dt
+function add_objective!(solver_model::Model, SCPV::SCPVariables, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}) where {T,E}
+  robot, model = SCPP.PD.robot, SCPP.PD.model
+  x_dim, u_dim, N = model.x_dim, model.u_dim, SCPP.N
 
-  J = dtp*norm(U[1:N-1])^2
-end
-
-function add_variables!(solver_model::Model, SCPV::SCPVariables{JuMP.VariableRef}, SCPP::SCPProblem{Car, DubinsCar, E}) where E
-	robot, model = SCPP.PD.robot, SCPP.PD.model
-	x_dim, u_dim, N = model.x_dim, model.u_dim, SCPP.N
-
-	@variable(solver_model, model.x_min[i] <= X[i=1:x_dim,1:N] <= model.x_max[i])
-	@variable(solver_model, model.u_min[i] <= U[i=1:u_dim,1:N] <= model.u_max[i])
-
-	SCPV.X = X
-	SCPV.U = U
-end
-
-function add_objective!(solver_model::Model, SCPV::SCPVariables, SCPP::SCPProblem{Car, DubinsCar, E}) where E
   U = SCPV.U
   N, dt = SCPP.N, SCPP.tf_guess/SCPP.N
 
-  @NLobjective(solver_model, Min, sum(dt*U[i]^2 for i = 1:N-1))
+  @NLobjective(solver_model, Min, sum(dt*U[i,k]^2 for i = 1:u_dim, k = 1:N-1))
 end
 
-function add_constraints!(solver_model::Model, SCPV::SCPVariables, traj_prev::Trajectory, SCPP::SCPProblem{Car, DubinsCar, E}) where E
-	X, U = SCPV.X, SCPV.U
-	Xp, Up, dtp = traj_prev.X, traj_prev.U, traj_prev.dt
-	robot, model, x_init, x_goal = SCPP.PD.robot, SCPP.PD.model, SCPP.PD.x_init, SCPP.PD.x_goal
-	x_dim, u_dim, N = model.x_dim, model.u_dim, SCPP.N
 
-	# Init (add these first for shooting method!)
-	for i = 1:x_dim
-		@constraint(solver_model, X[i,1] == x_init[i])
-	end
 
-	# Goal
-	for i = 1:x_dim
-		@constraint(solver_model, X[i,N] == x_goal[i])
-	end
+# function add_constraints!(solver_model::Model, SCPV::SCPVariables, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}) where {T,E}
+#   X, U = SCPV.X, SCPV.U
+#   Xp, Up, Tfp, dtp = traj_prev.X, traj_prev.U, traj_prev.Tf, traj_prev.dt
+#   Tf = copy(Tfp)
+#   robot, model, x_init, x_goal = SCPP.PD.robot, SCPP.PD.model, SCPP.PD.x_init, SCPP.PD.x_goal
+#   x_dim, u_dim, N, dh = model.x_dim, model.u_dim, SCPP.N, SCPP.dh
+#   WS = SCPP.WS
 
-	# Dynamics
-	for k = 1:N-1
-		@constraint(solver_model, X[1,k+1] == X[1,k] + dtp*model.v*(cos(Xp[3,k]) - sin(Xp[3,k])*(X[3,k] - Xp[3,k])))
-		@constraint(solver_model, X[2,k+1] == X[2,k] + dtp*model.v*(sin(Xp[3,k]) + cos(Xp[3,k])*(X[3,k] - Xp[3,k])))
-		@constraint(solver_model, X[3,k+1] == X[3,k] + dtp*model.k*U[k])
-	end
-end
+# function add_constraints!(solver_model::Model, SCPV::SCPVariables, traj_prev::Trajectory, SCPP::SCPProblem{Car, DubinsCar, E}) where E
+# 	X, U = SCPV.X, SCPV.U
+# 	Xp, Up, dtp = traj_prev.X, traj_prev.U, traj_prev.dt
+# 	robot, model, x_init, x_goal = SCPP.PD.robot, SCPP.PD.model, SCPP.PD.x_init, SCPP.PD.x_goal
+# 	x_dim, u_dim, N = model.x_dim, model.u_dim, SCPP.N
 
-function add_nonlinear_constraints!(solver_model::Model, SCPV::SCPVariables, traj_prev::Trajectory, SCPP::SCPProblem{Car, DubinsCar, E}) where E
-	X, U = SCPV.X, SCPV.U
-	Xp, Up, dtp = traj_prev.X, traj_prev.U, traj_prev.dt
-	robot, model, x_init, x_goal = SCPP.PD.robot, SCPP.PD.model, SCPP.PD.x_init, SCPP.PD.x_goal
-	x_dim, u_dim, N = model.x_dim, model.u_dim, SCPP.N
+# 	# Init (add these first for shooting method!)
+# 	for i = 1:x_dim
+# 		@constraint(solver_model, X[i,1] == x_init[i])
+# 	end
 
-	# Dynamics
-	for k = 1:N-1
-		@NLconstraint(solver_model, X[1,k+1] == X[1,k] + dt*model.v*cos(X[3,k]))
-		@NLconstraint(solver_model, X[2,k+1] == X[2,k] + dt*model.v*sin(X[3,k]))
-		@constraint(solver_model, X[3,k+1] == X[3,k] + dt*model.k*U[k])
-	end
+# 	# Goal
+# 	for i = 1:x_dim
+# 		@constraint(solver_model, X[i,N] == x_goal[i])
+# 	end
 
-	# Init and goal
-	for i = 1:x_dim
-		@constraint(solver_model, X[i,1] == x_init[i])
-		@constraint(solver_model, X[i,N] == x_goal[i])
-	end
-end
+# 	# Dynamics
+# 	for k = 1:N-1
+# 		@constraint(solver_model, X[1,k+1] == X[1,k] + dtp*model.v*(cos(Xp[3,k]) - sin(Xp[3,k])*(X[3,k] - Xp[3,k])))
+# 		@constraint(solver_model, X[2,k+1] == X[2,k] + dtp*model.v*(sin(Xp[3,k]) + cos(Xp[3,k])*(X[3,k] - Xp[3,k])))
+# 		@constraint(solver_model, X[3,k+1] == X[3,k] + dtp*model.k*U[k])
+# 	end
+# end
+
+# function add_nonlinear_constraints!(solver_model::Model, SCPV::SCPVariables, traj_prev::Trajectory, SCPP::SCPProblem{Car, DubinsCar, E}) where E
+# 	X, U = SCPV.X, SCPV.U
+# 	Xp, Up, dtp = traj_prev.X, traj_prev.U, traj_prev.dt
+# 	robot, model, x_init, x_goal = SCPP.PD.robot, SCPP.PD.model, SCPP.PD.x_init, SCPP.PD.x_goal
+# 	x_dim, u_dim, N = model.x_dim, model.u_dim, SCPP.N
+
+# 	# Dynamics
+# 	for k = 1:N-1
+# 		@NLconstraint(solver_model, X[1,k+1] == X[1,k] + dt*model.v*cos(X[3,k]))
+# 		@NLconstraint(solver_model, X[2,k+1] == X[2,k] + dt*model.v*sin(X[3,k]))
+# 		@constraint(solver_model, X[3,k+1] == X[3,k] + dt*model.k*U[k])
+# 	end
+
+# 	# Init and goal
+# 	for i = 1:x_dim
+# 		@constraint(solver_model, X[i,1] == x_init[i])
+# 		@constraint(solver_model, X[i,N] == x_goal[i])
+# 	end
+# end

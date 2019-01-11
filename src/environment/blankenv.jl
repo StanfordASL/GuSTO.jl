@@ -11,8 +11,8 @@ end
 function BlankEnv()
   worldAABBmin = -1000*ones(3)
   worldAABBmax = 1000*ones(3)
-  keepin_zones = Vector{GeometryTypes.GeometryPrimitive}(0)
-  keepout_zones = Vector{GeometryTypes.GeometryPrimitive}(0)
-  obstacle_set = Vector{GeometryTypes.GeometryPrimitive}(0)
+  keepin_zones = Vector{GeometryTypes.GeometryPrimitive}()
+  keepout_zones = Vector{GeometryTypes.GeometryPrimitive}()
+  obstacle_set = Vector{GeometryTypes.GeometryPrimitive}()
   BlankEnv(worldAABBmin, worldAABBmax, keepin_zones, keepout_zones, obstacle_set)
 end

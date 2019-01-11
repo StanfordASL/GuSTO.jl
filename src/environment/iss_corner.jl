@@ -9,20 +9,20 @@ mutable struct ISSCorner{T<:AbstractFloat} <: Environment
 end
 
 function ISSCorner{T}() where T
-  keepin_zones = Vector{HyperRectangle}(0)
+  keepin_zones = Vector{HyperRectangle}()
   vars = matread(joinpath(Pkg.dir("GuSTO"), "src", "environment","iss_corner.mat"))
   for zone in vars["keepin_zones"]
     push!(keepin_zones,
       HyperRectangle(Vec3f0(zone["corner1"][:]),Vec3f0(zone["corner2"][:]-zone["corner1"][:])))
   end
 
-  keepout_zones = Vector{GeometryTypes.GeometryPrimitive}(0)
+  keepout_zones = Vector{GeometryTypes.GeometryPrimitive}()
   for zone in vars["keepout_zones"]
     push!(keepout_zones,
       HyperRectangle(Vec3f0(zone["corner1"][:]),Vec3f0(zone["corner2"][:]-zone["corner1"][:])))
   end
 
-  obstacle_set = Vector{GeometryTypes.GeometryPrimitive}(0)
+  obstacle_set = Vector{GeometryTypes.GeometryPrimitive}()
 
   worldAABBmin = Inf*ones(T,3)
   worldAABBmax = -Inf*ones(T,3)

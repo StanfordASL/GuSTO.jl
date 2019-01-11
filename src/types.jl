@@ -98,18 +98,20 @@ function SCPVariables{T,S}(SCPP::SCPProblem) where {T <: Convex.Variable, S<:Uni
 	SCPVariables{T,S}(X,U,Tf)
 end
 
+ProbStatusTypes = Union{Symbol, MOI.TerminationStatusCode}
+
 mutable struct SCPSolution
 	traj::Trajectory
 	dual::Vector
 
 	J_true::Vector
 	J_full::Vector
-	prob_status::Vector							# Solver status
-	accept_solution::Vector 				# Solution accepted?
-	convergence_measure::Vector			# Convergence measure of the latest iteration
-	successful::Bool 								# Did we find an acceptable solution?
-	converged::Bool									# Has the solution met the convergence condition?
-	iterations::Int 								# Number of SCP iterations executed
+	prob_status::Vector{ProbStatusTypes}	# Solver status
+	accept_solution::Vector 							# Solution accepted?
+	convergence_measure::Vector						# Convergence measure of the latest iteration
+	successful::Bool 											# Did we find an acceptable solution?
+	converged::Bool												# Has the solution met the convergence condition?
+	iterations::Int 											# Number of SCP iterations executed
 	iter_elapsed_times::Vector
 	total_time
 
@@ -121,21 +123,31 @@ mutable struct SCPSolution
 end
 
 mutable struct SCPConstraints
-	dynamics::Vector
-	convex_state_eq::Vector
-	convex_state_ineq::Vector
-	nonconvex_state_eq::Vector
-	nonconvex_state_ineq::Vector
-	nonconvex_state_convexified_eq::Vector
-	nonconvex_state_convexified_ineq::Vector
-	convex_control_eq::Vector
-	convex_control_ineq::Vector
+	dynamics::Dict
+	convex_state_eq::Dict
+	convex_state_ineq::Dict
+	nonconvex_state_eq::Dict
+	nonconvex_state_ineq::Dict
+	nonconvex_state_convexified_eq::Dict
+	nonconvex_state_convexified_ineq::Dict
+	convex_control_eq::Dict
+	convex_control_ineq::Dict
 	# obstacle_avoidance_ineq::Vector
 	# obstacle_avoidance_convexified_ineq::Vector
-	state_trust_region_ineq::Vector
-	control_trust_region_ineq::Vector
+	state_trust_region_ineq::Dict
+	control_trust_region_ineq::Dict
 end
-SCPConstraints() = SCPConstraints(([] for i in 1:11)...)
+SCPConstraints() = SCPConstraints((Dict{Symbol, ConstraintCategory}() for i in 1:11)...)
+
+mutable struct ConstraintCategory
+	func
+	dimtype
+	ind_time
+	ind_other
+	con_reference
+	var_reference
+	ConstraintCategory(a,b,c,d) = new(a,b,c,d)
+end
 
 mutable struct ShootingProblem{R<:Robot, D<:DynamicsModel, E<:Environment}
 	PD::ProblemDefinition{R,D,E}
@@ -177,7 +189,7 @@ function Trajectory(TOP::TrajectoryOptimizationProblem)
 	N, tf_guess = TOP.N, TOP.tf_guess
 	dt = tf_guess/(N-1)
 
-	Trajectory(zeros(x_dim,N), zeros(u_dim,N), tf_guess, dt)
+	Trajectory(zeros(x_dim,N), zeros(u_dim,N-1), tf_guess, dt)
 end
 
 function Base.copy!(a::Trajectory, b::Trajectory)
