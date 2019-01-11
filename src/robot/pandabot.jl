@@ -109,17 +109,42 @@ PandaBot(::Type{T} = Float64; kwargs...) where {T} = PandaBot{T}(; kwargs...)
 ##################
 # Access Values
 ##################
-function get_EE_point_inWorldFrame(manipulator::PandaBot)
-  EE_point_inWorldFrame = RigidBodyDynamics.transform(manipulator.state, manipulator.EE_link_point, manipulator.world_frame)
-  return EE_point_inWorldFrame
-end
-function get_mass_matrix(manipulator::PandaBot)
-  mass_matrix(manipulator.state)
-end
-function get_torques(manipulator::PandaBot)
-  inverse_dynamics(manipulator.state, manipulator.q_dot)
+function get_EE_position(robot::PandaBot)
+  p_EE = RigidBodyDynamics.Spatial.transform(robot.state, robot.EE_link_point, robot.world_frame)
+  return p_EE.v
 end
 
+function get_EE_jacobian(robot::PandaBot)
+  # Jacobian of the EE with respect to the joint angles
+  # [∂r_EE/∂θ1 , ∂r_EE/∂θ2, ...] with r_EE the position of the bubble in the world (base) frame
+  J_pEE_joint = point_jacobian(robot.state,robot.EE_path, RigidBodyDynamics.Spatial.transform(robot.state,robot.EE_link_point,robot.world_frame))
+  return J_pEE_joint.J[:,1:robot.num_joints]
+end
+
+function get_bubble_position(bubble::panda_bubble, robot::PandaBot) 
+  pd = robot.pan
+  
+  link = RigidBodyDynamics.bodies(pd.mechanism)[bubble.parent_id]
+  link_frame = RigidBodyDynamics.default_frame(link)
+  link_point = RigidBodyDynamics.Point3D(link_frame,bubble.local_pose)
+  path = RigidBodyDynamics.path(pd.mechanism, root_body(pd.mechanism),link)
+  p_bubble = RigidBodyDynamics.transform(robot.state, link_point, robot.world_frame)
+  return p_bubble.v
+end
+
+function get_bubble_jacobian(bubble::panda_bubble, robot::PandaBot)
+  # Jacobian of the joint at the position of the bubble rb_idx with respect to the joint angles
+  # [∂r/∂θ1 , ∂r/∂θ2, ...] with r the position of the bubble in the world (base) frame
+  pd = robot.pan
+
+  link = RigidBodyDynamics.bodies(pd.mechanism)[bubble.parent_id]
+  link_frame = RigidBodyDynamics.default_frame(link)
+  link_point = RigidBodyDynamics.Point3D(link_frame,bubble.local_pose)
+  path = RigidBodyDynamics.path(pd.mechanism, root_body(pd.mechanism),link)
+
+  J_pEE_joint = point_jacobian(robot.state,path, RigidBodyDynamics.Spatial.transform(robot.state,link_point,robot.world_frame))
+  return J_pEE_joint.J[:,1:robot.num_joints]
+end
 
 ##################
 # Collision info 

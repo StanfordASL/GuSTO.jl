@@ -169,8 +169,8 @@ end
 function cost_convex_penalty_gusto(traj, traj_prev::Trajectory, SCPC::SCPConstraints, SCPP::SCPProblem)
 	omega, Delta = SCPP.param.alg.omega_vec[end], SCPP.param.alg.Delta_vec[end]
 	J = 0.
-	for (f, k, i) in SCPC.convex_state_ineq
-		J += omega*max(f(traj, traj_prev, SCPP, k, i), 0.)
+	for (f, k, j, i) in SCPC.convex_state_ineq
+		J += omega*max(f(traj, traj_prev, SCPP, k, j, i), 0.)
 	end
 	for (f, k, i) in SCPC.state_trust_region_ineq
 		J += omega*max(f(traj, traj_prev, SCPP, k, i) - Delta, 0.)
@@ -179,23 +179,25 @@ function cost_convex_penalty_gusto(traj, traj_prev::Trajectory, SCPC::SCPConstra
 end
 
 function cost_nonconvex_penalty_gusto(traj, traj_prev::Trajectory, SCPC::SCPConstraints, SCPP::SCPProblem)
+	omega = SCPP.param.alg.omega_vec[end]
 	J = 0.
-	for (f, k, i) in SCPC.nonconvex_state_ineq
-		J += max(f(traj, traj_prev, SCPP, k, i), 0.)
+	for (f, k, j, i) in SCPC.nonconvex_state_ineq
+		J += omega*max(f(traj, traj_prev, SCPP, k, j, i), 0.)
 	end
 	for (f, k, i) in SCPC.nonconvex_state_eq
-		J += abs(f(traj, traj_prev, SCPP, k, i))
+		J += omega*abs(f(traj, traj_prev, SCPP, k, i))
 	end
 	return J
 end
 
 function cost_nonconvex_penalty_convexified_gusto(traj, traj_prev::Trajectory, SCPC::SCPConstraints, SCPP::SCPProblem)
+	omega = SCPP.param.alg.omega_vec[end]
 	J = 0.
-	for (f, k, i) in SCPC.nonconvex_state_convexified_ineq
-		J += max(f(traj, traj_prev, SCPP, k, i), 0.)
+	for (f, k, j, i) in SCPC.nonconvex_state_convexified_ineq
+		J += omega*max(f(traj, traj_prev, SCPP, k, j, i), 0.)
 	end
 	for (f, k, i) in SCPC.nonconvex_state_convexified_eq
-		J += abs(f(traj, traj_prev, SCPP, k, i))
+		J += omega*abs(f(traj, traj_prev, SCPP, k, i))
 	end
 	return J
 end
@@ -209,8 +211,7 @@ function cost_penalty_full_convexified_gusto(traj, traj_prev::Trajectory, SCPC::
 end
 
 function cost_full_gusto(traj, traj_prev::Trajectory, SCPC::SCPConstraints, SCPP::SCPProblem)
-	omega = SCPP.param.alg.omega_vec[end]
-	1/omega*cost_true(traj, traj_prev, SCPP) + cost_penalty_full_gusto(traj, traj_prev, SCPC, SCPP)
+  cost_true(traj, traj_prev, SCPP) + cost_penalty_full_gusto(traj, traj_prev, SCPC, SCPP)
 end
 
 function cost_full_convexified_gusto(traj, traj_prev::Trajectory, SCPC::SCPConstraints, SCPP::SCPProblem)
@@ -232,9 +233,8 @@ end
 
 function convex_ineq_satisfied_gusto(traj::Trajectory, traj_prev::Trajectory, SCPC::SCPConstraints, SCPP::SCPProblem)
   # checks for satisfaction of convex state inequalities and nonconvex->convexified state inequalities
-	for (f, k, i) in (SCPC.convex_state_ineq..., SCPC.nonconvex_state_convexified_ineq...)
-		if f(traj, traj_prev, SCPP, k, i) > SCPP.param.alg.epsilon
-			# @show f(traj, traj_prev, SCPP, k, i)
+	for (f, k, j, i) in (SCPC.convex_state_ineq..., SCPC.nonconvex_state_convexified_ineq...)
+		if f(traj, traj_prev, SCPP, k, j, i) > SCPP.param.alg.epsilon
 			return false
 		end
 	end
