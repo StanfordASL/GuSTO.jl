@@ -77,6 +77,7 @@ mutable struct SCPProblem{R<:Robot, D<:DynamicsModel, E<:Environment}
 	dh				# Normalized dt
 end
 
+
 VariableTypes = Union{Convex.Variable, JuMP.VariableRef}
 
 mutable struct SCPVariables{T <: VariableTypes, S<:Union{T,Array{T}}}
@@ -113,7 +114,7 @@ mutable struct SCPSolution
 	converged::Bool												# Has the solution met the convergence condition?
 	iterations::Int 											# Number of SCP iterations executed
 	iter_elapsed_times::Vector
-	total_time
+	total_time 	# TODO(ambyld): Move to TOP
 
 	param::SCPParam
 	SCPP::SCPProblem
@@ -153,32 +154,41 @@ mutable struct ShootingProblem{R<:Robot, D<:DynamicsModel, E<:Environment}
 	PD::ProblemDefinition{R,D,E}
 
 	p0 	# Initial dual
+	N 	# Discretization steps
 	tf  # Final time
 end
+
+OptAlgorithmProblem = Union{SCPProblem, ShootingProblem}
 
 mutable struct ShootingSolution
 	traj::Trajectory
 
+	J_true::Vector
+	prob_status::Vector
+	convergence_measure::Vector
 	converged::Bool
+	iter_elapsed_times::Vector
 
-	ShootingSolution() = new()
+	SP::ShootingProblem
 end
+ShootingSolution(SP, traj_init) = ShootingSolution(traj_init, [], [:(NA)], [0.], false, [0.], SP)
 
 mutable struct TrajectoryOptimizationSolution
 	traj::Trajectory
 	SCPS::SCPSolution
 	SS::ShootingSolution
+	total_time
 	TrajectoryOptimizationSolution(TOP::TrajectoryOptimizationProblem) = new(Trajectory(TOP))
 end
 
-ShootingProblem(TOP::TrajectoryOptimizationProblem, SCPS::SCPSolution) = ShootingProblem(TOP.PD, SCPS.dual, SCPS.traj.Tf)
+ShootingProblem(TOP::TrajectoryOptimizationProblem, SCPS::SCPSolution) = ShootingProblem(TOP.PD, SCPS.dual, TOP.N, SCPS.traj.Tf)
 
 TrajectoryOptimizationProblem(PD, N, tf_guess; fixed_final_time::Bool=false) = TrajectoryOptimizationProblem(PD, fixed_final_time, N, tf_guess, 1/(N-1))
 
 # Initialize a blank trajectory optimization solution
 # TrajectoryOptimizationSolution(TOP::TrajectoryOptimizationProblem) = TrajectoryOptimizationSolution(Trajectory(TOP))
 
-SCPSolution(SCPP::SCPProblem, traj_init::Trajectory) = SCPSolution(traj_init, [], [], [], [:(NA)], [true], [0.], false, false, 0, [], 0., SCPP.param, SCPP)
+SCPSolution(SCPP::SCPProblem, traj_init::Trajectory) = SCPSolution(traj_init, [], [], [], [:(NA)], [true], [0.], false, false, 0, [0.], 0., SCPP.param, SCPP)
 
 Trajectory(X, U, Tf) = Trajectory(X, U, Tf, Tf/(size(X,2)-1))
 
@@ -199,7 +209,7 @@ function Base.copy!(a::Trajectory, b::Trajectory)
 	a.dt = deepcopy(b.dt)
 end
 
-Base.deepcopy(a::Trajectory) = Trajectory(deepcopy(a.X), deepcopy(a.U), deepcopy(a.T), deepcopy(a.dt))
+Base.deepcopy(a::Trajectory) = Trajectory(deepcopy(a.X), deepcopy(a.U), deepcopy(a.Tf), deepcopy(a.dt))
 
 function SCPProblem(TOP::TrajectoryOptimizationProblem)
 	N = TOP.N

@@ -259,6 +259,11 @@ function model_ode!(xdot, x, SP::ShootingProblem{Car, DubinsCar, E}, t) where E
 	xdot[6] = px*model.v*sin(th) - py*model.v*cos(th)
 end
 
+function get_control(x, p, SP::ShootingProblem{Car, DubinsCar, E}) where E
+	model = SP.PD.model
+	U = model.k/2*p[3,:]
+end
+
 #######
 # JuMP
 #######

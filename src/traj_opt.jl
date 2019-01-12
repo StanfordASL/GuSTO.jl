@@ -13,17 +13,19 @@ function solve_SCPshooting!(TOS::TrajectoryOptimizationSolution, TOP::Trajectory
 	# Run SCP with initialization trajectory
 	SCPS = SCPSolution(SCPP, traj_init)
 	SP = ShootingProblem(TOP, SCPS)
-	SS = ShootingSolution()
+	SS = ShootingSolution(SP, deepcopy(traj_init))
 
 	solve_method!(SCPS, SCPP, solver, 1; kwarg...)
+	push!(SS.J_true, SCPS.J_true[1])
 
 	# Until shooting method succeeds or maximum SCP iterations is reached
+	ss_sol = nothing
 	while (!SCPS.converged)
 		# Attempt shooting method
 		SP = ShootingProblem(TOP, SCPS)
-		solve!(SS, SP)
+		ss_sol = solve!(SS, SP)
 		
-		# If shooting converged, exit
+		# If successful shooting runs have converged, exit
 		SS.converged ? break : nothing
 
 		# Run another iteration of SCP

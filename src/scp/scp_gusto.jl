@@ -71,27 +71,35 @@ function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Ipopt", 
 
 	initialize_model_params!(SCPP, SCPS.traj)
 	push!(SCPS.J_true, cost_true(SCPS.traj, SCPS.traj, SCPP))
+	push!(SCPS.J_full, SCPS.J_true[end])
 	push!(ρ_vec, trust_region_ratio_gusto(SCPS.traj, SCPS.traj, SCPP))
 	param.obstacle_toggle_distance = Δ_vec[end]/8 + model.clearance # TODO: Generalize clearance
 
-	first_time = true
 	while (SCPS.iterations < iter_cap)
 		time_start = time_ns()
 
+		# TODO: Avoid reconstructing the problem from scratch
+		if solver == "Mosek"
+			SCPS.solver_model = Model(with_optimizer(Mosek.Optimizer; kwarg...))
+		elseif solver == "Gurobi"
+			SCPS.solver_model = Model(with_optimizer(Gurobi.Optimizer; kwarg...))
+		elseif solver == "Ipopt"
+			SCPS.solver_model = Model(with_optimizer(Ipopt.Optimizer; kwarg...))
+		else 	# Default solver
+			SCPS.solver_model = Model(with_optimizer(Ipopt.Optimizer; kwarg...))
+		end
+
 		# Set up, solve problem
-		# SCPS.solver_model = Model(with_optimizer(SCS.Optimizer))
-		# SCPS.solver_model = Model(with_optimizer(MosekOptimizer))
-		SCPS.solver_model = Model(with_optimizer(Ipopt.Optimizer, print_level=0))
 		update_model_params!(SCPP, SCPS.traj)
 		add_variables_jump!(SCPS, SCPV, SCPP)
 		add_constraints_gusto_jump!(SCPS, SCPV, SCPC, SCPP)
 		add_objective_gusto_jump!(SCPS, SCPV, SCPC, SCPP)
+
 		set_start_value.(SCPV.X, SCPS.traj.X)
 		set_start_value.(SCPV.U, SCPS.traj.U)
 		set_start_value(SCPV.Tf, SCPP.tf_guess)
 
 		JuMP.optimize!(SCPS.solver_model)
-		first_time = false
 
 		push!(SCPS.prob_status, JuMP.termination_status(SCPS.solver_model))
 		if SCPS.prob_status[end] ∉ (MOI.OPTIMAL, MOI.LOCALLY_SOLVED)
@@ -103,14 +111,8 @@ function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Ipopt", 
 		# Recover solution
 		new_traj = Trajectory(JuMP.value.(SCPV.X), JuMP.value.(SCPV.U), JuMP.value.(SCPV.Tf))
 		push!(SCPS.convergence_measure, convergence_metric(new_traj, SCPS.traj, SCPP))
-
+		push!(SCPS.J_full, JuMP.objective_value(SCPS.solver_model))
 		SCPS.dual = get_dual_jump(SCPC, SCPP)
-
-		# Recover solution
-		# new_traj = Trajectory(SCPV.X.value, SCPV.U.value, SCPV.Tf.value[1])
-		# push!(SCPS.convergence_measure, convergence_metric(new_traj, SCPS.traj, SCPP))
-		# push!(SCPS.J_full, prob.optval)
-		# SCPS.dual = get_dual_cvx(prob, SCPP, solver)
 		
 		# Check trust regions
 		push!(trust_region_satisfied_vec, trust_region_satisfied_gusto(new_traj, SCPS.traj, SCPP))
@@ -153,7 +155,8 @@ function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Ipopt", 
 		end
 		!SCPS.accept_solution[end] ? continue : nothing
 
-		if SCPS.convergence_measure[end] <= param.convergence_threshold
+		conv_iter_spread = 2
+		if SCPS.iterations > conv_iter_spread && sum(SCPS.convergence_measure[end-conv_iter_spread+1:end]) <= param.convergence_threshold
 			SCPS.converged = true
 			convex_ineq_satisfied_vec[end] && (SCPS.successful = true)
 			force ? continue : break
@@ -365,7 +368,8 @@ function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", m
 		end
 		!SCPS.accept_solution[end] ? continue : nothing
 
-		if SCPS.convergence_measure[end] <= param.convergence_threshold
+		conv_iter_spread = 2
+		if SCPS.iterations > conv_iter_spread && sum(SCPS.convergence_measure[end-conv_iter_spread+1:end]) <= param.convergence_threshold
 			SCPS.converged = true
 			convex_ineq_satisfied_vec[end] && (SCPS.successful = true)
 			force ? continue : break
