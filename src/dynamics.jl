@@ -40,12 +40,12 @@ function cse_goal_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem, k::
 end
 
 ## Convex state inequality constraints
-function csi_max_bound_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem, k::Int, i::Int)
+function csi_max_bound_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem, k::Int, j::Int, i::Int)
 	X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev(traj, traj_prev, SCPP)
 	X[i,k] - model.x_max[i]
 end
 
-function csi_min_bound_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem, k::Int, i::Int)
+function csi_min_bound_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem, k::Int, j::Int, i::Int)
 	X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev(traj, traj_prev, SCPP)
 	model.x_min[i] - X[i,k]
 end

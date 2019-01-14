@@ -114,9 +114,11 @@ function get_EE_position(robot::PandaBot)
   return p_EE.v
 end
 
+"""
+  Jacobian of the EE w.r.t. the joint angles
+  [∂r_EE/∂θ1 , ∂r_EE/∂θ2, ...] with r_EE the position of the bubble in the world (base) frame
+"""
 function get_EE_jacobian(robot::PandaBot)
-  # Jacobian of the EE with respect to the joint angles
-  # [∂r_EE/∂θ1 , ∂r_EE/∂θ2, ...] with r_EE the position of the bubble in the world (base) frame
   J_pEE_joint = point_jacobian(robot.state,robot.EE_path, RigidBodyDynamics.Spatial.transform(robot.state,robot.EE_link_point,robot.world_frame))
   return J_pEE_joint.J[:,1:robot.num_joints]
 end
@@ -132,9 +134,11 @@ function get_bubble_position(bubble::panda_bubble, robot::PandaBot)
   return p_bubble.v
 end
 
+"""
+  Jacobian of the joint at the position of a collision bubble w.r.t. the joint angles
+  [∂r/∂θ1 , ∂r/∂θ2, ...] with r the position of the bubble in the world (base) frame
+"""
 function get_bubble_jacobian(bubble::panda_bubble, robot::PandaBot)
-  # Jacobian of the joint at the position of the bubble rb_idx with respect to the joint angles
-  # [∂r/∂θ1 , ∂r/∂θ2, ...] with r the position of the bubble in the world (base) frame
   pd = robot.pan
 
   link = RigidBodyDynamics.bodies(pd.mechanism)[bubble.parent_id]
