@@ -157,39 +157,40 @@ function panda_bubbles()
   # Information for spheres along kinematic chain stored here
   arr = Vector{panda_bubble}(0)
 
-  # Link 1
-  push!(arr, panda_bubble(3,[0.;0.;-0.12],0.08))
-  push!(arr, panda_bubble(3,[-0.0;-0.05;-0.02],0.08))
-
-  # Link 2
-  push!(arr, panda_bubble(4,[0.;-0.02;0.06],0.07))
-  push!(arr, panda_bubble(4,[0.;-0.08;0.03],0.07))
-  push!(arr, panda_bubble(4,[0.;-0.14;0.01],0.07))
-
-  # Link 3
-  push!(arr, panda_bubble(5,[0.;0.;-0.08],0.05))
-  push!(arr, panda_bubble(5,[0.04;0.04;-0.03],0.05))
-  push!(arr, panda_bubble(5,[0.1;0.07;0.02],0.05))
-
-  # Link 4
-  push!(arr, panda_bubble(6,[0.;0.;0.06],0.06))
-  push!(arr, panda_bubble(6,[-0.06;0.02;0.04],0.06))
-  push!(arr, panda_bubble(6,[-0.07;0.08;0.01],0.06))
-
-  # Link 5
-  push!(arr, panda_bubble(7,[0.;0.01;-0.2],0.06))
-  push!(arr, panda_bubble(7,[0.;0.05;-0.13],0.06))
-  push!(arr, panda_bubble(7,[0.;0.09;-0.06],0.06))
- 
-  # Link 6
-  push!(arr, panda_bubble(8,[0.0;0.0;-0.08],0.05))
-  push!(arr, panda_bubble(8,[-0.02;0.0;0.02],0.03))
-  push!(arr, panda_bubble(8,[0.01;0.0;0.02],0.03))
+  #Link 1
+  push!(arr, panda_bubble(3,[0.;0.;-0.12],0.05))
+  push!(arr, panda_bubble(3,[-0.0;-0.05;-0.02],0.05))
   
-  # Link 7
-  push!(arr, panda_bubble(9,[0.0;0.0;0.1],0.05))
-  push!(arr, panda_bubble(9,[0.0;0.0;0.15],0.04))
-  push!(arr, panda_bubble(9,[0.04;0.05;0.15],0.04))
-  push!(arr, panda_bubble(9,[-0.04;-0.05;0.15],0.04))
+  #Link 2
+  push!(arr, panda_bubble(4,[0.;-0.02;0.06],0.05))
+  push!(arr, panda_bubble(4,[0.;-0.12;0.02],0.05))
+  
+  #Link 3
+  push!(arr, panda_bubble(5,[-0.01;-0.01;-0.09],0.04))
+  push!(arr, panda_bubble(5,[0.04;0.04;-0.04],0.04))
+  push!(arr, panda_bubble(5,[0.09;0.06;0.01],0.03))
+  
+  #Link 4
+  push!(arr, panda_bubble(6,[0.;-0.02;0.04],0.03))
+  push!(arr, panda_bubble(6,[-0.04;0.04;0.04],0.03))
+  push!(arr, panda_bubble(6,[-0.07;0.09;0.01],0.03))
+  
+  #Link 5
+  push!(arr, panda_bubble(7,[0.;0.01;-0.2],0.04))
+  push!(arr, panda_bubble(7,[0.;0.04;-0.12],0.04))
+  push!(arr, panda_bubble(7,[0.;0.07;-0.04],0.04))
+  
+  #Link 6
+  push!(arr, panda_bubble(8,[0.035;0.0;-0.08],0.02))
+  push!(arr, panda_bubble(8,[-0.02;0.01;0.01],0.02))
+  push!(arr, panda_bubble(8,[0.03;0.01;0.01],0.02))
+  push!(arr, panda_bubble(8,[0.09;0.01;0.02],0.025))
+  push!(arr, panda_bubble(8,[0.09;0.01;-0.04],0.025))
+  
+  #Link 7
+  push!(arr, panda_bubble(9,[0.0;0.0;0.1],0.025))
+  push!(arr, panda_bubble(9,[0.04;0.04;0.15],0.02))
+  push!(arr, panda_bubble(9,[0.0;0.0;0.15],0.02))
+  push!(arr, panda_bubble(9,[-0.04;-0.04;0.15],0.02))
   return arr
 end
