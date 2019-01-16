@@ -67,7 +67,10 @@ mutable struct SCPParam
 	SCPParam(a::Bool, b) = new(a,b)
 end
 
-mutable struct SCPProblem{R<:Robot, D<:DynamicsModel, E<:Environment}
+# Optimization algorithm problem
+abstract type OptAlgorithmProblem{R<:Robot, D<:DynamicsModel, E<:Environment} end
+
+mutable struct SCPProblem{R,D,E} <: OptAlgorithmProblem{R,D,E}
 	PD::ProblemDefinition{R,D,E}
   WS::Workspace
 	param::SCPParam
@@ -76,7 +79,6 @@ mutable struct SCPProblem{R<:Robot, D<:DynamicsModel, E<:Environment}
 	tf_guess	# Guess for final time
 	dh				# Normalized dt
 end
-
 
 VariableTypes = Union{Convex.Variable, JuMP.VariableRef}
 
@@ -150,15 +152,13 @@ mutable struct ConstraintCategory
 	ConstraintCategory(a,b,c,d) = new(a,b,c,d)
 end
 
-mutable struct ShootingProblem{R<:Robot, D<:DynamicsModel, E<:Environment}
+mutable struct ShootingProblem{R,D,E} <: OptAlgorithmProblem{R,D,E}
 	PD::ProblemDefinition{R,D,E}
 
 	p0 	# Initial dual
 	N 	# Discretization steps
 	tf  # Final time
 end
-
-OptAlgorithmProblem = Union{SCPProblem, ShootingProblem}
 
 mutable struct ShootingSolution
 	traj::Trajectory
@@ -171,7 +171,7 @@ mutable struct ShootingSolution
 
 	SP::ShootingProblem
 end
-ShootingSolution(SP, traj_init) = ShootingSolution(traj_init, [], [:(NA)], [0.], false, [0.], SP)
+ShootingSolution(SP, traj_init) = ShootingSolution(traj_init, [], [:(NA)], [NaN], false, [0.], SP)
 
 mutable struct TrajectoryOptimizationSolution
 	traj::Trajectory

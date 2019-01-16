@@ -8,7 +8,9 @@ function solve!(SS::ShootingSolution, SP::ShootingProblem)
 	shooting_eval! = (F, p0) -> parameterized_shooting_eval!(F, p0, SP)
 
 	# Run Newton method
+	time_start = time_ns()
 	sol_newton = nlsolve(shooting_eval!, SP.p0, iterations = 20) # TODO(ambyld): Make number of iterations a parameter
+	iter_elapsed_time = (time_ns() - time_start)/10^9
 
 	if sol_newton.f_converged
 		# Recover trajectory
@@ -23,11 +25,16 @@ function solve!(SS::ShootingSolution, SP::ShootingProblem)
 		U = get_control(X, P, SP)
 		new_traj = Trajectory(X, U, tf, dt)
 
-		# TODO: Add metrics, check for convergence over multiple successes
 		push!(SS.prob_status, :Optimal)
+		push!(SS.J_true, cost_true(new_traj, new_traj, SP))
+		push!(SS.convergence_measure, convergence_metric(new_traj, SS.traj, SP))
+		push!(SS.iter_elapsed_times, iter_elapsed_time)
+		copy!(SS.traj, new_traj)
 	else
-		# TODO: Add metrics
 		push!(SS.prob_status, :Diverged)
+		push!(SS.J_true, NaN)
+		push!(SS.convergence_measure, NaN)
+		push!(SS.iter_elapsed_times, iter_elapsed_time)
 	end
 end
 

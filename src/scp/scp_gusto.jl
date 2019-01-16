@@ -46,7 +46,6 @@ end
 ########
 # JuMP
 ########
-
 function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Ipopt", max_iter=50, force=false; kwarg...)
 	# Solves a sequential convex programming problem
 	# Inputs:

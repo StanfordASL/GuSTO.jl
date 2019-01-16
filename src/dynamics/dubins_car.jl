@@ -33,7 +33,7 @@ function DubinsCar()
 end
 
 function SCPParam(model::DubinsCar, fixed_final_time::Bool)
-  convergence_threshold = 0.1
+  convergence_threshold = 1e-3
 
   SCPParam(fixed_final_time, convergence_threshold)
 end
@@ -52,19 +52,16 @@ function SCPParam_GuSTO(model::DubinsCar)
   SCPParam_GuSTO(Δ0, ω0, ω_max, ε, ρ0, ρ1, β_succ, β_fail, γ_fail)
 end
 
-###########
-# Convex.jl 
-###########
-function cost_true(traj, traj_prev::Trajectory, SCPP::SCPProblem{Car, DubinsCar, E}) where E
+function cost_true(traj, traj_prev::Trajectory, OAP::A) where A <: OptAlgorithmProblem{Car, DubinsCar, E} where E
 	U = traj.U
-  N = SCPP.N
+  N = OAP.N
   dtp = traj_prev.dt 	# TODO(ambyld): Change to current trajectory dt?
 
   return dtp*sum(U[j]^2 for j = 1:N-1)
 end
 
-function cost_true_convexified(traj, traj_prev::Trajectory, SCPP::SCPProblem{Car, DubinsCar, E}) where E
-	cost_true(traj, traj_prev, SCPP)
+function cost_true_convexified(traj, traj_prev::Trajectory, OAP::A) where A <: OptAlgorithmProblem{Car, DubinsCar, E} where E
+	cost_true(traj, traj_prev, OAP)
 end
 
 #############################
@@ -241,7 +238,7 @@ function get_dual_cvx(prob::Convex.Problem, SCPP::SCPProblem{Car, DubinsCar, E},
 end
 
 function get_dual_jump(SCPC::SCPConstraints, SCPP::SCPProblem{Car, DubinsCar, E}) where E
-	JuMP.dual.([SCPC.convex_state_eq[:cse_init_constraints].con_reference[0,(i,)] for i = SCPC.convex_state_eq[:cse_init_constraints].ind_other[1]])
+	-JuMP.dual.([SCPC.convex_state_eq[:cse_init_constraints].con_reference[0,(i,)] for i = SCPC.convex_state_eq[:cse_init_constraints].ind_other[1]])
 end
 
 function model_ode!(xdot, x, SP::ShootingProblem{Car, DubinsCar, E}, t) where E
