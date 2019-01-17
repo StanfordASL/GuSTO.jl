@@ -383,7 +383,6 @@ function trust_region_ratio_gusto(traj, traj_prev::Trajectory, SCPP::SCPProblem{
   env_ = WS.btenvironment_keepout
 
   for k in 1:N-1
-    #linearized = fp[k] + Ap[k]*(X[:,k]-Xp[:,k])
     linearized = fp[k] + Ap[k]*(X[:,k]-Xp[:,k]) + Bp*(U[:,k]-Up[:,k])
     num += norm(f_dyn(X[:,k],U[:,k],robot,model) - linearized)
     den += norm(linearized)
@@ -421,8 +420,8 @@ function trust_region_ratio_trajopt(traj, traj_prev::Trajectory, SCPP::SCPProble
   dt = traj.dt
 
   for k in 1:N-1
-    phi_old = norm(fp[k] - (Xp[:,k]-Xp[:,k])/dtp, 1)
-    phi_new = norm(f_dyn(X[:,k],U[:,k],robot,model) - (X[:,k]-X[:,k])/dt, 1)
+    phi_old = norm(fp[k] - (Xp[:,k+1]-Xp[:,k])/dtp, 1)
+    phi_new = norm(f_dyn(X[:,k],U[:,k],robot,model) - (X[:,k+1]-X[:,k])/dt, 1)
     phi_hat_new = norm(dynamics_constraints(traj,traj_prev,SCPP,k,0), 1)
     num += (phi_old-phi_new)
     den += (phi_old-phi_hat_new) 

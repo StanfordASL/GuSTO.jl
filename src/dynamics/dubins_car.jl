@@ -236,7 +236,6 @@ function trust_region_ratio_gusto(traj, traj_prev::Trajectory, SCPP::SCPProblem{
   num, den = 0, 0
 
   for k in 1:N-1
-    #linearized = fp[k] + Ap[k]*(X[:,k]-Xp[:,k])
     linearized = fp[k] + Ap[k]*(X[:,k]-Xp[:,k]) + Bp*(U[1,k]-Up[1,k])
     num += norm(f_dyn(X[:,k],U[:,k],robot,model) - linearized)
     den += norm(linearized)
