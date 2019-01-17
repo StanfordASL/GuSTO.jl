@@ -7,6 +7,7 @@ mutable struct Table{T<:AbstractFloat} <: Environment
   keepout_zones::Vector
   obstacle_set::Vector
 end
+
 function Table{T}(room::Symbol=:ames) where T
   # 2D granite table
 
@@ -21,7 +22,14 @@ function Table{T}(room::Symbol=:ames) where T
     worldAABBmin, worldAABBmax = [0.,0.,0.], [12.,9.,0.001]*ft2m
   end
  
+  return Table(worldAABBmin, worldAABBmax)
+end
+Table(room::Symbol=:ames,::Type{T} = Float64; kwargs...) where {T} = Table{T}(room; kwargs...)
+
+function Table{T}(worldAABBmin::AbstractArray{T}, worldAABBmax::AbstractArray{T})
   keepin_zones = Vector{HyperRectangle}(0)
+  (length(worldAABBmin) == 2) ? push!(worldAABBmin, T(-1)) : nothing
+  (length(worldAABBmax) == 2) ? push!(worldAABBmax, T(1)) : nothing
   push!(keepin_zones, HyperRectangle(worldAABBmin..., (worldAABBmax-worldAABBmin)...))
 
   # Add obstacles surrounding table
@@ -43,7 +51,5 @@ function Table{T}(room::Symbol=:ames) where T
   end
   obstacle_set = Vector{GeometryTypes.GeometryPrimitive}(0)
 
-  return Table{T}(worldAABBmin,worldAABBmax,
-    keepin_zones,keepout_zones,obstacle_set)
+  return Table{T}(worldAABBmin, worldAABBmax, keepin_zones, keepout_zones, obstacle_set)
 end
-Table(room=:ames,::Type{T} = Float64; kwargs...) where {T} = Table{T}(room; kwargs...)
