@@ -450,10 +450,7 @@ function SCPConstraints(SCPP::SCPProblem{PandaBot{T}, PandaKin, E}) where {T,E}
   nothing
 
   ## Convex control inequality constraints
-  for k = 1:N-1
-    push!(SCPC.convex_control_ineq, (cci_max_bound_constraints, k, 1))
-    push!(SCPC.convex_control_ineq, (cci_min_bound_constraints, k, 1))
-  end
+  nothing
 
   ## Nonconvex state equality constraints
   nothing
@@ -518,39 +515,43 @@ function trust_region_ratio_gusto(traj, traj_prev::Trajectory, SCPP::SCPProblem{
   for k in 1:N
     Xq,Xq0 = X[:,k], Xp[:,k]
     
-    for (rb_idx,body_point) in enumerate(env_.convex_robot_components)
-      bubble_1 = env_.convex_robot_components[rb_idx]
+    for (rb_idx_1,body_point) in enumerate(env_.convex_robot_components)
+      bubble_1 = env_.convex_robot_components[rb_idx_1]
 
       RigidBodyDynamics.set_configuration!(robot.state, get_configuration(Xq,model))
-      r_bubble_1 = get_bubble_position(robot.bubble_array[rb_idx],robot)
+      r_bubble_1 = get_bubble_position(robot.bubble_array[rb_idx_1],robot)
 
       RigidBodyDynamics.set_configuration!(robot.state, get_configuration(Xq0,model))
-      r0_bubble_1    = get_bubble_position(robot.bubble_array[rb_idx],robot)
-      Jr_∂x = get_bubble_jacobian(robot.bubble_array[rb_idx],robot) * get_jacobian_embedding(Xq0,SCPP)
+      r0_bubble_1    = get_bubble_position(robot.bubble_array[rb_idx_1],robot)
+      Jr_∂x = get_bubble_jacobian(robot.bubble_array[rb_idx_1],robot) * get_jacobian_embedding(Xq0,SCPP)
 
       # Check for collision with obstacles
       for (env_idx,convex_env_component) in enumerate(env_.convex_env_components)
-        dist, xbody, xobs = BulletCollision.distance(env_, rb_idx, r0_bubble_1, env_idx)
+        dist, xbody, xobs = BulletCollision.distance(env_, rb_idx_1, r0_bubble_1, env_idx)
         nhat = dist > 0 ?
           (xbody-xobs)./norm(xbody-xobs) :
           (xobs-xbody)./norm(xobs-xbody) 
         linearized = clearance - (dist + nhat'*Jr_∂x*(Xq-Xq0))
         
-        dist,xbody,xobs = BulletCollision.distance(env_,rb_idx,r_bubble_1,env_idx)
+        dist,xbody,xobs = BulletCollision.distance(env_,rb_idx_1,r_bubble_1,env_idx)
 
         num += abs((clearance-dist) - linearized) 
         den += abs(linearized) 
       end
 
       # Check for self-collision 
-      for idx2 in 1:rb_idx-1
+      for rb_idx_2 in 1:rb_idx_1-1
         RigidBodyDynamics.set_configuration!(robot.state, get_configuration(Xq0,model))
-        r0_bubble_2 = get_bubble_position(robot.bubble_array[idx2],robot)
+        r0_bubble_2 = get_bubble_position(robot.bubble_array[rb_idx_2],robot)
 
-        bubble_2 = env_.convex_robot_components[idx2]
+        BulletCollision.set_transformation(bubble_1, r0_bubble_1)
+        bubble_2 = env_.convex_robot_components[rb_idx_2]
         BulletCollision.set_transformation(bubble_2, r0_bubble_2)
 
         dist,xbody,xobs = BulletCollision.distance(bubble_1, bubble_2)
+      
+        RigidBodyDynamics.set_configuration!(robot.state, get_configuration(Xq0,model))
+        Jr_∂x = get_bubble_jacobian(robot.bubble_array[rb_idx_1],robot) * get_jacobian_embedding(Xq0,SCPP)
 
         nhat = dist > 0 ?
           (xbody-xobs)./norm(xbody-xobs) :
@@ -558,10 +559,10 @@ function trust_region_ratio_gusto(traj, traj_prev::Trajectory, SCPP::SCPProblem{
         linearized = clearance - (dist + nhat'*Jr_∂x*(Xq-Xq0))
         
         RigidBodyDynamics.set_configuration!(robot.state, get_configuration(Xq,model))
-        r_bubble_1 = get_bubble_position(robot.bubble_array[rb_idx],robot)
+        r_bubble_1 = get_bubble_position(robot.bubble_array[rb_idx_1],robot)
         BulletCollision.set_transformation(bubble_1, r_bubble_1)
 
-        r_bubble_2 = get_bubble_position(robot.bubble_array[idx2],robot)
+        r_bubble_2 = get_bubble_position(robot.bubble_array[rb_idx_2],robot)
         BulletCollision.set_transformation(bubble_2, r_bubble_2)
 
         dist,xbody,xobs = BulletCollision.distance(bubble_1, bubble_2)
@@ -746,7 +747,7 @@ function get_jacobian_embedding(X::Vector,SCPP::SCPProblem)
   for i in 1:model.num_joints
     x1,x2 = X[2*i-1:2*i]
     sum_squares = x1^2 + x2^2     # TODO(acauligi): should this := 1?
-    Jθ_∂x[i,2*i-1:2*i] = [-x2; x1]/sum_squares
+    Jθ_∂x[i,2*i-1:2*i] = [1/x2; -1/x1]
   end
   return Jθ_∂x
 end
