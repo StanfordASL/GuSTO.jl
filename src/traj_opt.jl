@@ -52,3 +52,15 @@ function solve_SCP!(TOS::TrajectoryOptimizationSolution, TOP::TrajectoryOptimiza
 	TOS.traj, TOS.SCPS = SCPS.traj, SCPS
 	solve_method!(SCPS, SCPP, solver; kwarg...)
 end
+
+function solve_SCP!(TOS::TrajectoryOptimizationSolution, TOP::TrajectoryOptimizationProblem, solve_method!, traj_init::Trajectory, solver="Mosek"; kwarg...)
+	robot = TOP.PD.robot
+	model = TOP.PD.model
+
+	SCPP = SCPProblem(TOP)
+	
+	# Run SCP with initialization trajectory
+	SCPS = SCPSolution(SCPP, traj_init)
+	TOS.traj, TOS.SCPS = SCPS.traj, SCPS
+	solve_method!(SCPS, SCPP, solver; kwarg...)
+end
