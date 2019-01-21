@@ -80,6 +80,7 @@ mutable struct SCPProblem{R,D,E} <: OptAlgorithmProblem{R,D,E}
 	dh				# Normalized dt
 end
 
+# TODO: Remove Convex.jl
 VariableTypes = Union{Convex.Variable, JuMP.VariableRef}
 
 mutable struct SCPVariables{T <: VariableTypes, S<:Union{T,Array{T}}}

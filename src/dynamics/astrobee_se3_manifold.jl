@@ -2,9 +2,8 @@ export AstrobeeSE3Manifold
 export init_traj_straightline, init_traj_geometricplan
 
 mutable struct AstrobeeSE3Manifold <: DynamicsModel
-  # state: r v p ω
-  x_dim
-  u_dim
+  x_dim   # state: r v p ω
+  u_dim   # control a α
   clearance
 
   x_min
@@ -28,7 +27,7 @@ function AstrobeeSE3Manifold()
 end
 
 function SCPParam(model::AstrobeeSE3Manifold, fixed_final_time::Bool)
-  convergence_threshold = 0.01
+  convergence_threshold = 1e-5 #0.001
   SCPParam(fixed_final_time, convergence_threshold)
 end
 
@@ -71,13 +70,10 @@ function SCPParam_TrajOpt(model::AstrobeeSE3Manifold)
   SCPParam_TrajOpt(μ0, s0, c, τ_plus, τ_minus, k, ftol, xtol, ctol, max_penalty_iteration, max_convex_iteration, max_trust_iteration)
 end
 
-######
-# CVX 
-######
-function cost_true(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold}) where T
-  u_dim = SCPP.PD.model.u_dim
+function cost_true(traj, traj_prev::Trajectory, OAP::A) where A <: OptAlgorithmProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E} where {T,E}
+  u_dim = OAP.PD.model.u_dim
 
-  U,N = traj.U, SCPP.N
+  U, N = traj.U, OAP.N
   Jm = 0
   for k in 1:N-1
     # Jm += norm(U[:,k])^2
@@ -87,13 +83,22 @@ function cost_true(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, 
   return Jm
 end
 
-function cost_true_convexified(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}) where {T,E}
-  cost_true(traj, traj_prev, SCPP)
+function cost_true_convexified(traj, traj_prev::Trajectory, OAP::A) where A <: OptAlgorithmProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E} where {T,E}
+  cost_true(traj, traj_prev, OAP)
 end
 
 #############################
 # Trajectory Initializations
 #############################
+function init_traj_nothing(TOP::TrajectoryOptimizationProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}) where {T,E}
+  model, x_init, x_goal = TOP.PD.model, TOP.PD.x_init, TOP.PD.x_goal
+  x_dim, u_dim, N, tf_guess = model.x_dim, model.u_dim, TOP.N, TOP.tf_guess
+
+  X = repmat(0.5(x_init + x_goal),1,N)
+  U = zeros(u_dim,N-1)
+  Trajectory(X, U, tf_guess)
+end
+
 function init_traj_straightline(TOP::TrajectoryOptimizationProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}) where {T,E}
   model, x_init, x_goal = TOP.PD.model, TOP.PD.x_init, TOP.PD.x_goal
   x_dim, u_dim, N, tf_guess = model.x_dim, model.u_dim, TOP.N, TOP.tf_guess
@@ -144,9 +149,8 @@ macro constraint_abbrev_AstrobeeSE3Manifold(traj, traj_prev, SCPP)
   end
 end
 
-
 ## Dynamics constraints
-function dynamics_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}, k::Int, i::Int) where {T,E}
+function dynamics_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}, k::Int) where {T,E}
   # Where i is the state index, and k is the timestep index
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_AstrobeeSE3Manifold(traj, traj_prev, SCPP)
   fp, Ap, Bp = get_f(k, model), get_A(k, model), get_B(k, model)
@@ -172,20 +176,25 @@ function f_dyn(x::Vector, u::Vector, robot::Robot, model::AstrobeeSE3Manifold)
 end
 
 function update_f!(f, x::Vector, u::Vector, robot::Robot, model::AstrobeeSE3Manifold)
-  r, v, w = x[1:3], x[4:6], x[11:13]
+  r, v, ω = x[1:3], x[4:6], x[11:13]
   qx, qy, qz, qw = x[7:10]
-  wx, wy, wz = x[11:13]
+  ωx, ωy, ωz = x[11:13]
   F, M = u[1:3], u[4:6]
 
   f[1:3] = v
   f[4:6] = 1/robot.mass*F
 
   # SO(3)
-  f[7] = 1/2*(-wx*qy - wy*qz - wz*qw)
-  f[8] = 1/2*( wx*qx - wz*qz + wy*qw)
-  f[9] = 1/2*( wy*qx + wz*qy - wx*qw)
-  f[10] = 1/2*(wz*qx - wy*qy + wx*qz)
-  f[11:13] = robot.Jinv*(M - cross(w,robot.J*w))
+  # f[7] = 1/2*(-ωx*qy - ωy*qz - ωz*qw)
+  # f[8] = 1/2*( ωx*qx - ωz*qz + ωy*qw)
+  # f[9] = 1/2*( ωy*qx + ωz*qy - ωx*qw)
+  # f[10] = 1/2*(ωz*qx - ωy*qy + ωx*qz)
+
+  f[7]  = 1/2*( ωz*qy - ωy*qz + ωx*qw)
+  f[8]  = 1/2*(-ωz*qx + ωx*qz + ωy*qw)
+  f[9]  = 1/2*( ωy*qx - ωx*qy + ωz*qw)
+  f[10] = 1/2*(-ωx*qx - ωy*qy - ωz*qz)
+  f[11:13] = robot.Jinv*(M - cross(ω,robot.J*ω))
 end
 
 function A_dyn(x::Vector, robot::Robot, model::AstrobeeSE3Manifold)
@@ -199,43 +208,71 @@ end
 function update_A!(A, x::Vector, robot::Robot, model::AstrobeeSE3Manifold)
   Jxx, Jyy, Jzz = diag(robot.J)
   qx, qy, qz, qw = x[7:10] 
-  wx, wy, wz = x[11:13]
+  ωx, ωy, ωz = x[11:13]
 
-  # See scripts/symbolic_math.m for derivation of these equations
-  A[7,8] = -wx/2
-  A[7,9] = -wy/2
-  A[7,10] = -wz/2
-  A[7,11] = -qy/2
+  # A[7,8] = -ωx/2
+  # A[7,9] = -ωy/2
+  # A[7,10] = -ωz/2
+  # A[7,11] = -qy/2
+  # A[7,12] = -qz/2
+  # A[7,13] = -qw/2
+
+  # A[8,7] = ωx/2
+  # A[8,9] = -ωz/2
+  # A[8,10] = ωy/2
+  # A[8,11] = qx/2
+  # A[8,12] = qw/2
+  # A[8,13] = -qz/2
+
+  # A[9,7] = ωy/2
+  # A[9,8] = ωz/2
+  # A[9,10] = -ωx/2
+  # A[9,11] = -qw/2
+  # A[9,12] = qx/2
+  # A[9,13] = qy/2
+
+  # A[10,7] = ωz/2
+  # A[10,8] = -ωy/2
+  # A[10,9] = ωx/2
+  # A[10,11] = qz/2
+  # A[10,12] = -qy/2
+  # A[10,13] = qx/2
+
+  A[7,8] = ωz/2
+  A[7,9] = -ωy/2
+  A[7,10] = ωx/2
+  A[7,11] = qw/2
   A[7,12] = -qz/2
-  A[7,13] = -qw/2
+  A[7,13] = qy/2
 
-  A[8,7] = wx/2
-  A[8,9] = -wz/2
-  A[8,10] = wy/2
-  A[8,11] = qx/2
+  A[8,7] = -ωz/2
+  A[8,9] = ωx/2
+  A[8,10] = ωy/2
+  A[8,11] = qz/2
   A[8,12] = qw/2
-  A[8,13] = -qz/2
+  A[8,13] = -qx/2
 
-  A[9,7] = wy/2
-  A[9,8] = wz/2
-  A[9,10] = -wx/2
-  A[9,11] = -qw/2
+  A[9,7] = ωy/2
+  A[9,8] = -ωx/2
+  A[9,10] = ωz/2
+  A[9,11] = -qy/2
   A[9,12] = qx/2
-  A[9,13] = qy/2
+  A[9,13] = qw/2
 
-  A[10,7] = wz/2
-  A[10,8] = -wy/2
-  A[10,9] = wx/2
-  A[10,11] = qz/2
+  A[10,7] = -ωx/2
+  A[10,8] = -ωy/2
+  A[10,9] = -ωz/2
+  A[10,11] = -qx/2
   A[10,12] = -qy/2
-  A[10,13] = qx/2
+  A[10,13] = -qz/2
 
-  A[11,12] = (Jyy-Jzz)*wz/Jxx
-  A[11,13] = (Jyy-Jzz)*wy/Jxx
-  A[12,11] = -(Jxx-Jzz)*wz/Jyy
-  A[12,13] = -(Jxx-Jzz)*wx/Jyy
-  A[13,11] = (Jxx-Jyy)*wy/Jzz
-  A[13,12] = (Jxx-Jyy)*wx/Jzz
+  # TODO: Change to account for nondiagonal inertia
+  A[11,12] = (Jyy-Jzz)*ωz/Jxx
+  A[11,13] = (Jyy-Jzz)*ωy/Jxx
+  A[12,11] = -(Jxx-Jzz)*ωz/Jyy
+  A[12,13] = -(Jxx-Jzz)*ωx/Jyy
+  A[13,11] = (Jxx-Jyy)*ωy/Jzz
+  A[13,12] = (Jxx-Jyy)*ωx/Jzz
 end
 
 function B_dyn(x::Vector, robot::Robot, model::AstrobeeSE3Manifold)
@@ -247,38 +284,32 @@ function B_dyn(x::Vector, robot::Robot, model::AstrobeeSE3Manifold)
 end
 
 ## Convex state inequality constraints
-function csi_orientation_sign(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}, k::Int, i::Int) where {T,E}
+function csi_orientation_sign(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}, k::Int) where {T,E}
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_AstrobeeSE3Manifold(traj, traj_prev, SCPP)
   return -X[10,k]
 end
 
-function csi_translational_velocity_bound(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}, k::Int, i::Int) where {T,E}
+function csi_translational_velocity_bound(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}, k::Int) where {T,E}
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_AstrobeeSE3Manifold(traj, traj_prev, SCPP)
-  #return norm(X[4:6,k]) - robot.hard_limit_vel
-  # Changed from the norm function so it works with JuMP
   return sum(X[3+j,k]^2 for j = 1:3)  - robot.hard_limit_vel^2
 end
 
-function csi_angular_velocity_bound(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}, k::Int, i::Int) where {T,E}
+function csi_angular_velocity_bound(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}, k::Int) where {T,E}
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_AstrobeeSE3Manifold(traj, traj_prev, SCPP)
-  # Changed from the norm function so it works with JuMP
-  #return norm(X[11:13,k]) - robot.hard_limit_ω
   return sum(X[10+j,k]^2 for j = 1:3)  - robot.hard_limit_ω^2
 end
 
 ## Convex control inequality constraints
-function cci_translational_accel_bound(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}, k::Int, i::Int) where {T,E}
+function cci_translational_accel_bound(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}, k::Int) where {T,E}
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_AstrobeeSE3Manifold(traj, traj_prev, SCPP)
-  #return 1/robot.mass*norm(U[1:3,k]) - robot.hard_limit_accel
   return 1/robot.mass*sum(U[j,k]^2 for j = 1:3)  - robot.hard_limit_accel^2
 end
 
-function cci_angular_accel_bound(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}, k::Int, i::Int) where {T,E}
+function cci_angular_accel_bound(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}, k::Int) where {T,E}
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_AstrobeeSE3Manifold(traj, traj_prev, SCPP)
   #return norm(robot.Jinv*U[4:6,k]) - robot.hard_limit_α
-  return sum(sum(robot.Jinv[j,i]*U[i,k] for i=1:3)^2 for j = 1:3) - robot.hard_limit_α^2
+  return sum(sum(robot.Jinv[j,i]*U[3+i,k] for i=1:3)^2 for j = 1:3) - robot.hard_limit_α^2
 end
-
 
 ## Nonconvex state inequality constraints
 function ncsi_obstacle_avoidance_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}, k::Int, i::Int) where {T,E}
@@ -321,6 +352,7 @@ function ncsi_obstacle_avoidance_constraints_convexified(traj, traj_prev::Trajec
     return 0.
   end
 end
+
 function ncsi_obstacle_avoidance_constraints_convexified_jump(SCPV::SCPVariables, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}, k::Int, i::Int) where {T,E}
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_AstrobeeSE3Manifold(SCPV, traj_prev, SCPP)
   
@@ -350,17 +382,16 @@ function ncsi_obstacle_avoidance_constraints_convexified_jump(SCPV::SCPVariables
 end
 
 ## State trust region inequality constraints
-function stri_state_trust_region(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}, k::Int, i::Int) where {T,E}
+function stri_state_trust_region(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}, k::Int) where {T,E}
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_AstrobeeSE3Manifold(traj, traj_prev, SCPP)
 
-  #return norm(X[:,k]-Xp[:,k])^2
   return sum((X[j,k]-Xp[j,k])^2 for j = 1:x_dim)
 end
 
 ## Trust region inequality constraints
-function ctri_control_trust_region(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}, k::Int, i::Int) where {T,E}
+function ctri_control_trust_region(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}, k::Int) where {T,E}
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_AstrobeeSE3Manifold(traj, traj_prev, SCPP)
-  #return norm(U[:,k]-Up[:,k])
+  
   return sum((U[j,k]-Up[j,k])^2 for j = 1:u_dim)
 end
 
@@ -377,69 +408,50 @@ function SCPConstraints(SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E})
   SCPC = SCPConstraints()
 
   ## Dynamics constraints
-  for k = 1:N-1
-    push!(SCPC.dynamics, (dynamics_constraints, k, 0))
-  end
+  add_constraint_category!(SCPC.dynamics, dynamics_constraints, :array, 1:N-1)
 
   ## Convex state equality constraints
   # Init and goal (add init first for convenience of getting dual)
-  for i = 1:x_dim
-    push!(SCPC.convex_state_eq, (cse_init_constraints, 0, i))
-  end
-  for i = 1:x_dim
-    push!(SCPC.convex_state_eq, (cse_goal_constraints, 0, i))
-  end
+  add_constraint_category!(SCPC.convex_state_eq, cse_init_constraints, :scalar, 0, 1:x_dim)
+  add_constraint_category!(SCPC.convex_state_eq, cse_goal_constraints, :scalar, 0, 1:x_dim)
 
   ## Convex state inequality constraints
-  for k = 1:N
-    push!(SCPC.convex_state_ineq, (csi_orientation_sign, k, 0))
-    push!(SCPC.convex_state_ineq, (csi_translational_velocity_bound, k, 0))
-    push!(SCPC.convex_state_ineq, (csi_angular_velocity_bound, k, 0))
-  end
+  add_constraint_category!(SCPC.convex_state_ineq, csi_orientation_sign, :scalar, 1:N)
+  add_constraint_category!(SCPC.convex_state_ineq, csi_translational_velocity_bound, :scalar, 1:N)
+  add_constraint_category!(SCPC.convex_state_ineq, csi_angular_velocity_bound, :scalar, 1:N)
 
   ## Nonconvex state equality constraints
   nothing
 
   ## Nonconvex state inequality constraints
   env_ = WS.btenvironment_keepout
-  # for k = 1:N, i = 1:length(env_.convex_env_components)
-  #   push!(SCPC.nonconvex_state_ineq, (ncsi_obstacle_avoidance_constraints, k, i))
-  # end
+  N_obs = length(WS.btenvironment_keepout.convex_env_components)
+  add_constraint_category!(SCPC.nonconvex_state_convexified_ineq, ncsi_obstacle_avoidance_constraints_convexified, :scalar, 1:N-1, 1:N_obs)
 
   ## Nonconvex state equality constraints (convexified)
   nothing
 
   ## Nonconvex state inequality constraints (convexified)
-  env_ = WS.btenvironment_keepout
-  # for k = 1:N, i = 1:length(env_.convex_env_components)
-  #   push!(SCPC.nonconvex_state_convexified_ineq, (ncsi_obstacle_avoidance_constraints_convexified, k, i))
-  # end
+  add_constraint_category!(SCPC.nonconvex_state_convexified_ineq, ncsi_obstacle_avoidance_constraints_convexified, :scalar, 1:N-1, 1:N_obs)
 
   ## Convex control equality constraints
   nothing
 
   ## Convex control inequality constraints
-  for k = 1:N-1
-    push!(SCPC.convex_control_ineq, (cci_translational_accel_bound, k, 0))
-    push!(SCPC.convex_control_ineq, (cci_angular_accel_bound, k, 0))
-  end
+  add_constraint_category!(SCPC.convex_state_ineq, cci_translational_accel_bound, :scalar, 1:N-1)
+  add_constraint_category!(SCPC.convex_state_ineq, cci_angular_accel_bound, :scalar, 1:N-1)
 
   ## State trust region ineqality constraints
-  for k = 1:N
-    push!(SCPC.state_trust_region_ineq, (stri_state_trust_region, k, 0))
-  end
+  add_constraint_category!(SCPC.state_trust_region_ineq, cci_angular_accel_bound, :scalar, 1:N-1)
 
   ## Constrol trust region inequality constraints
-  for k = 1:N-1
-    push!(SCPC.control_trust_region_ineq, (ctri_control_trust_region, k, 0))
-  end
+  add_constraint_category!(SCPC.control_trust_region_ineq, ctri_control_trust_region, :scalar, 1:N-1)
 
   return SCPC
 end
 
 # TODO(ambyld): Generalize this
 function trust_region_ratio_gusto(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}) where {T,E}
-  # Where i is the state index, and k is the timestep index
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_AstrobeeSE3Manifold(traj, traj_prev, SCPP)
   fp, Ap = model.f, model.A
   num,den = 0, 0 
@@ -453,24 +465,24 @@ function trust_region_ratio_gusto(traj, traj_prev::Trajectory, SCPP::SCPProblem{
   
   clearance = model.clearance 
 
-  # for k in 1:N
-  #   r0 = get_workspace_location(traj, SCPP, k)
-  #   r = get_workspace_location(traj_prev, SCPP, k)
-  #   for (rb_idx,body_point) in enumerate(env_.convex_robot_components)
-  #     for (env_idx,convex_env_component) in enumerate(env_.convex_env_components)
-  #       dist,xbody,xobs = BulletCollision.distance(env_,rb_idx,r0,env_idx)
-  #       nhat = dist > 0 ?
-  #         (xbody-xobs)./norm(xbody-xobs) :
-  #         (xobs-xbody)./norm(xobs-xbody) 
-  #       linearized = clearance - (dist + nhat'*(r-r0))
-  #       
-  #       dist,xbody,xobs = BulletCollision.distance(env_,rb_idx,r,env_idx)
-  #       
-  #       num += abs((clearance-dist) - linearized) 
-  #       den += abs(linearized) 
-  #     end
-  #   end
-  # end
+  for k in 1:N
+    r0 = get_workspace_location(traj, SCPP, k)
+    r = get_workspace_location(traj_prev, SCPP, k)
+    for (rb_idx,body_point) in enumerate(env_.convex_robot_components)
+      for (env_idx,convex_env_component) in enumerate(env_.convex_env_components)
+        dist,xbody,xobs = BulletCollision.distance(env_,rb_idx,r0,env_idx)
+        nhat = dist > 0 ?
+          (xbody-xobs)./norm(xbody-xobs) :
+          (xobs-xbody)./norm(xobs-xbody) 
+        linearized = clearance - (dist + nhat'*(r-r0))
+        
+        dist,xbody,xobs = BulletCollision.distance(env_,rb_idx,r,env_idx)
+        
+        num += abs((clearance-dist) - linearized) 
+        den += abs(linearized) 
+      end
+    end
+  end
   return num/den
 end
 
@@ -544,13 +556,79 @@ function get_dual_cvx(prob::Convex.Problem, SCPP::SCPProblem{Astrobee3D{T}, Astr
 end
 
 function get_dual_jump(SCPC::SCPConstraints, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}) where {T,E}
-  @show "test"
-  @show JuMP.dual(SCPC.convex_state_eq[:cse_init_constraints].con_reference[1])
-  @show "test2"
-	JuMP.dual.(SCPC.convex_state_eq[:cse_init_constraints].con_reference)
+  JuMP.dual.([SCPC.convex_state_eq[:cse_init_constraints].con_reference[0,(i,)] for i = SCPC.convex_state_eq[:cse_init_constraints].ind_other[1]])
 end
-function get_status_jump(SCPS::SCPSolution, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}) where {T,E}
-  MathProgBase.status(SCPS.solver_model.internalModel)
+
+function shooting_ode!(xdot, x, SP::ShootingProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}, t) where {T,E}
+  robot, model = SP.PD.robot, SP.PD.model
+  x, p = x[1:13], x[14:26]
+
+  r, v, ω = x[1:3], x[4:6], x[11:13]
+  qx, qy, qz, qw = x[7:10]
+  ωx, ωy, ωz = x[11:13]
+
+  pr, pv, pω = p[1:3], p[4:6], p[11:13]
+  pqx, pqy, pqz, pqw = p[7:10]
+
+  J, Jinv, mass = robot.J, robot.Jinv, robot.mass
+
+  # Control
+  u = get_control(x, p, SP)
+  F, M = u[1:3], u[4:6]
+
+  # xdot[7] = 1/2(-ωx*qy - ωy*qz - ωz*qw)  # qdot
+  # xdot[8] = 1/2( ωx*qx - ωz*qz + ωy*qw)
+  # xdot[9] = 1/2( ωy*qx + ωz*qy - ωx*qw)
+  # xdot[10] = 1/2(ωz*qx - ωy*qy + ωx*qz)
+
+  # State variables
+  xdot[1:3] = v                           # rdot
+  xdot[4:6] = 1/mass*F                    # vdot
+  xdot[7]  = 1/2*( ωz*qy - ωy*qz + ωx*qw)  # qdot
+  xdot[8]  = 1/2*(-ωz*qx + ωx*qz + ωy*qw)
+  xdot[9]  = 1/2*( ωy*qx - ωx*qy + ωz*qw)
+  xdot[10] = 1/2*(-ωx*qx - ωy*qy - ωz*qz)
+  xdot[11:13] = Jinv*(M - cross(ω,J*ω))   # ωdot
+
+  # xdot[20] = -1/2( pqy*ωx + pqz*ωy + pqw*ωz)
+  # xdot[21] = -1/2(-pqx*ωx + pqz*ωz - pqw*ωy)
+  # xdot[22] = -1/2(-pqx*ωy - pqy*ωz + pqw*ωx)
+  # xdot[23] = -1/2(-pqx*ωz + pqy*ωy - pqz*ωx)
+
+  # Dual variables
+  xdot[14:16] = Zeros(3)
+  xdot[17:19] = -pr
+  xdot[20] = -1/2*(-pqy*ωz + pqz*ωy - pqw*ωx)
+  xdot[21] = -1/2*( pqx*ωz - pqz*ωx - pqw*ωy)
+  xdot[22] = -1/2*(-pqx*ωy + pqy*ωx - pqw*ωz)
+  xdot[23] = -1/2*( pqx*ωx + pqy*ωy + pqz*ωz)
+  
+  a1 = [-J[3,1]*ωy + J[2,1]*ωz
+         2*J[3,1]*ωx + J[3,2]*ωy - J[1,1]*ωz + J[3,3]*ωz
+        -2*J[2,1]*ωx + J[1,1]*ωy - J[2,2]*ωy - J[2,3]*ωz]
+  a2 = [-J[3,1]*ωx - 2*J[3,2]*ωy + J[2,2]*ωz - J[3,3]*ωz
+         J[3,2]*ωx - J[1,2]*ωz
+         J[1,1]*ωx - J[2,2]*ωx + 2*J[1,2]*ωy + J[1,3]*ωz]
+  a3 = [ J[2,1]*ωx + J[2,2]*ωy - J[3,3]*ωy + 2*J[2,3]*ωz
+        -J[1,1]*ωx + J[3,3]*ωx - J[1,2]*ωy - 2*J[1,3]*ωz
+        -J[2,3]*ωx + J[1,3]*ωy]
+
+  # xdot[24] = -dot(pω, Jinv*a1) - 1/2(-pqx*qy + pqy*qx - pqz*qw + pqw*qz)
+  # xdot[25] = -dot(pω, Jinv*a2) - 1/2(-pqx*qz + pqy*qw + pqz*qx - pqw*qy)
+  # xdot[26] = -dot(pω, Jinv*a3) - 1/2(-pqx*qw - pqy*qz + pqz*qy + pqw*qx)
+
+  xdot[24] = -dot(pω, Jinv*a1) - 1/2*( pqx*qw + pqy*qz - pqz*qy - pqw*qx)
+  xdot[25] = -dot(pω, Jinv*a2) - 1/2*(-pqx*qz + pqy*qw + pqz*qx - pqw*qy)
+  xdot[26] = -dot(pω, Jinv*a3) - 1/2*( pqx*qy - pqy*qx + pqz*qw - pqw*qz)
+end
+
+function get_control(x, p, SP::ShootingProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}) where {T,E}
+  robot = SP.PD.robot
+  pv, pω = p[4:6,:], p[11:13,:]
+
+  F = -2*pv/robot.mass
+  M = -2*robot.Jinv*pω
+  [F; M]
 end
 
 ###########
@@ -625,12 +703,9 @@ function verify_collision_free(traj::Trajectory, SCPP::SCPProblem{Astrobee3D{T},
   return true, 0, 0.
 end
 
-
-
 #######
 # JuMP
 #######
-
 function add_objective!(solver_model::Model, SCPV::SCPVariables, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}) where {T,E}
   robot, model = SCPP.PD.robot, SCPP.PD.model
   x_dim, u_dim, N = model.x_dim, model.u_dim, SCPP.N
@@ -639,59 +714,4 @@ function add_objective!(solver_model::Model, SCPV::SCPVariables, SCPP::SCPProble
   N, dt = SCPP.N, SCPP.tf_guess/SCPP.N
 
   @NLobjective(solver_model, Min, sum(dt*U[i,k]^2 for i = 1:u_dim, k = 1:N-1))
-end
-
-function add_constraints!(solver_model::Model, SCPV::SCPVariables, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}) where {T,E}
-  X, U = SCPV.X, SCPV.U
-  Xp, Up, Tfp, dtp = traj_prev.X, traj_prev.U, traj_prev.Tf, traj_prev.dt
-  Tf = copy(Tfp)
-  robot, model, x_init, x_goal = SCPP.PD.robot, SCPP.PD.model, SCPP.PD.x_init, SCPP.PD.x_goal
-  x_dim, u_dim, N, dh = model.x_dim, model.u_dim, SCPP.N, SCPP.dh
-  WS = SCPP.WS
-  
-  # Init (add these first for shooting method!)
-  for i = 1:x_dim
-    @constraint(solver_model, 0. == cse_init_constraints(SCPV, traj_prev, SCPP, 0, i) )
-  end
-  # Goal
-  for i = 1:x_dim
-    # @constraint(solver_model, X[i,N] == x_goal[i])
-    #@constraint(solver_model, 0. == cse_goal_constraints_jump(SCPV, traj_prev, SCPP, 0, i) )
-    @constraint(solver_model, 0. == cse_goal_constraints(SCPV, traj_prev, SCPP, 0, i) )
-  end
-
-  # Dynamics
-  # for k = 1:N-1
-  #   for i = 1:x_dim
-  #     @constraint(solver_model, 0. == dynamics_constraints_jump(SCPV, traj_prev, SCPP, k, i) )
-  #   end
-  # end
-  for k = 1:N-1
-    @constraint(solver_model, 0. .== dynamics_constraints(SCPV, traj_prev, SCPP, k, 0) )
-  end
-
-  ## Convex state inequality constraints
-  for k = 1:N
-    #@constraint(solver_model, 0. >= csi_orientation_sign_jump(SCPV, traj_prev, SCPP, k, 0) )
-    #@constraint(solver_model, 0. >= csi_translational_velocity_bound_jump(SCPV, traj_prev, SCPP, k, 0) )
-    #@constraint(solver_model, 0. >= csi_angular_velocity_bound_jump(SCPV, traj_prev, SCPP, k, 0) )
-    @constraint(solver_model, 0. >= csi_orientation_sign(SCPV, traj_prev, SCPP, k, 0) )
-    @constraint(solver_model, 0. >= csi_translational_velocity_bound(SCPV, traj_prev, SCPP, k, 0) )
-    @constraint(solver_model, 0. >= csi_angular_velocity_bound(SCPV, traj_prev, SCPP, k, 0) )
-  end
-
-  ## Convex control inequality constraints
-  for k = 1:N-1
-    #@constraint(solver_model, 0. >= cci_translational_accel_bound_jump(SCPV, traj_prev, SCPP, k, 0) )
-    #@constraint(solver_model, 0. >= cci_angular_accel_bound_jump(SCPV, traj_prev, SCPP, k, 0) )
-    @constraint(solver_model, 0. >= cci_translational_accel_bound(SCPV, traj_prev, SCPP, k, 0) )
-    @constraint(solver_model, 0. >= cci_angular_accel_bound(SCPV, traj_prev, SCPP, k, 0) )
-  end
-
-  # ## Nonconvex state inequality constraints (convexified)
-  # env_ = WS.btenvironment_keepout
-  # for k = 1:N, i = 1:length(env_.convex_env_components)
-  #   @constraint(solver_model, 0. >= ncsi_obstacle_avoidance_constraints_convexified_jump(SCPV, traj_prev, SCPP, k, i) )
-  # end
-  
 end

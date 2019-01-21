@@ -154,7 +154,7 @@ function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Ipopt", 
 		end
 		!SCPS.accept_solution[end] ? continue : nothing
 
-		conv_iter_spread = 2
+		conv_iter_spread = 10
 		if SCPS.iterations > conv_iter_spread && sum(SCPS.convergence_measure[end-conv_iter_spread+1:end]) <= param.convergence_threshold
 			SCPS.converged = true
 			convex_ineq_satisfied_vec[end] && (SCPS.successful = true)
@@ -367,7 +367,7 @@ function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", m
 		end
 		!SCPS.accept_solution[end] ? continue : nothing
 
-		conv_iter_spread = 2
+		conv_iter_spread = 10
 		if SCPS.iterations > conv_iter_spread && sum(SCPS.convergence_measure[end-conv_iter_spread+1:end]) <= param.convergence_threshold
 			SCPS.converged = true
 			convex_ineq_satisfied_vec[end] && (SCPS.successful = true)

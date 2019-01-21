@@ -1,6 +1,8 @@
 %% Discretization of double integrator dynamics for ZOH
 % Fundamentals of Linear State Space Systems (John Bay)
-syms t t0 tau
+sym('t', 'real')
+sym('t0','real')
+sym('tau','real')
 assume(t, 'real');
 assume(t0, 'real');
 assume(tau, 'real');

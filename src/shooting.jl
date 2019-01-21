@@ -4,6 +4,8 @@ export solve!
 function solve!(SS::ShootingSolution, SP::ShootingProblem)
 	model, x_init, x_goal = SP.PD.model, SP.PD.x_init, SP.PD.x_goal
 
+	@show SP.p0
+
 	# Set up shooting function
 	shooting_eval! = (F, p0) -> parameterized_shooting_eval!(F, p0, SP)
 
@@ -18,7 +20,7 @@ function solve!(SS::ShootingSolution, SP::ShootingProblem)
 		x0 = [x_init; sol_newton.zero]
 		tspan = (0., tf)
 		dt = tf/(N-1)
-		prob = ODEProblem(model_ode!, x0, tspan, SP)
+		prob = ODEProblem(shooting_ode!, x0, tspan, SP)
 		sol_ode = DifferentialEquations.solve(prob, saveat=dt)
 		xp = hcat(sol_ode.u...)
 		X, P = xp[1:x_dim,:], xp[x_dim+1:end,:]
@@ -45,7 +47,7 @@ function parameterized_shooting_eval!(F, p0, SP::ShootingProblem)
 
 	x0 = [x_init; p0]
 	tspan = (0., tf)
-	prob = ODEProblem(model_ode!, x0, tspan, SP)
+	prob = ODEProblem(shooting_ode!, x0, tspan, SP)
 	sol = DifferentialEquations.solve(prob)
 
 	for i = 1:x_dim
