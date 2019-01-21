@@ -160,8 +160,8 @@ function add_constraints_trajopt_cvx(SCPV::SCPVariables, traj_prev::Trajectory, 
   for (f, k, i) in SCPC.state_trust_region_ineq
 		constraints += f(SCPV, traj_prev, SCPP, k, i) - s <= 0
 	end
-  for (f, k, i) in SCPC.convex_state_eq 
-		constraints += f(SCPV, traj_prev, SCPP, k, i) == 0
+  for (f, k, j, i) in SCPC.convex_state_eq 
+		constraints += f(SCPV, traj_prev, SCPP, k, j, i) == 0
 	end
   for (f, k, i) in SCPC.convex_state_goal_ineq
 		constraints += f(SCPV, traj_prev, SCPP, k, i) <= 0
@@ -174,8 +174,8 @@ function cost_convex_state_eq_penalty_trajopt(traj, traj_prev::Trajectory, SCPC:
 	mu = SCPP.param.alg.mu_vec[end]
 
 	J = 0
-	for (f, k, i) in (SCPC.nonconvex_state_convexified_eq..., SCPC.dynamics...)
-		J += mu*norm(f(traj, traj_prev, SCPP, k, i),1)
+	for (f, k, j, i) in (SCPC.nonconvex_state_convexified_eq..., SCPC.dynamics...)
+		J += mu*norm(f(traj, traj_prev, SCPP, k, j, i),1)
 	end
   return J
 end
@@ -184,12 +184,12 @@ function cost_convex_ineq_penalty_trajopt(traj, traj_prev::Trajectory, SCPC::SCP
 	mu = SCPP.param.alg.mu_vec[end]
 
 	J = 0
-	for (f, k, i) in (SCPC.convex_state_ineq..., SCPC.nonconvex_state_convexified_ineq...)
-		J += mu*max(f(traj, traj_prev, SCPP, k, i), 0)
+	for (f, k, j, i) in (SCPC.convex_state_ineq..., SCPC.nonconvex_state_convexified_ineq...)
+		J += mu*max(f(traj, traj_prev, SCPP, k, j, i), 0)
   end
 
-  for (f, k, i) in SCPC.convex_control_ineq
-		J += mu*max(f(traj, traj_prev, SCPP, k, i), 0)
+  for (f, k, j, i) in SCPC.convex_control_ineq
+		J += mu*max(f(traj, traj_prev, SCPP, k, j, i), 0)
   end
 
   return J
@@ -216,19 +216,19 @@ function evaluate_ctol(traj::Trajectory, traj_prev::Trajectory, SCPP::SCPProblem
   JDen = 0
 	constraint_list = (SCPC.convex_state_ineq..., SCPC.nonconvex_state_ineq...,SCPC.convex_state_eq...,SCPC.convex_state_goal_ineq...,SCPC.dynamics...,SCPC.nonconvex_state_eq...)
 	if length(constraint_list) > 0
-		(f, k, i) = constraint_list[1] 	# Get first function handle
+		(f, k, j, i) = constraint_list[1] 	# Get first function handle
 		JtestNum = 0
     JtestDen = 0
-		for (fnext, k, i) in constraint_list	# Loop through all constraints
+		for (fnext, k, j, i) in constraint_list	# Loop through all constraints
 			if fnext == f	# Evaluate and update maximum value while considering same class of constraints
-				JtestNum = max(JtestNum, norm(fnext(traj, traj, SCPP, k, i) -fnext(traj_prev, traj_prev, SCPP, k, i)))
-        JtestDen = max(JtestDen, norm(fnext(traj, traj, SCPP, k, i)))
+				JtestNum = max(JtestNum, norm(fnext(traj, traj, SCPP, k, j, i) -fnext(traj_prev, traj_prev, SCPP, k, j, i)))
+        JtestDen = max(JtestDen, norm(fnext(traj, traj, SCPP, k, j, i)))
 			else		# Entering new class of constraints
 				JNum += JtestNum	# Add max from previous class of constraints to cost
         JDen += JtestDen
 				f = fnext	# Update function handle representing current class of constraints
-				JtestNum = norm(fnext(traj, traj, SCPP, k, i) - fnext(traj_prev, traj_prev, SCPP, k, i)) 	# Evaluate value of first member of new class of constraints
-        JtestDen = norm(fnext(traj, traj, SCPP, k, i))
+				JtestNum = norm(fnext(traj, traj, SCPP, k, j, i) - fnext(traj_prev, traj_prev, SCPP, k, j, i)) 	# Evaluate value of first member of new class of constraints
+        JtestDen = norm(fnext(traj, traj, SCPP, k, j, i))
 			end
 		end
 	end

@@ -29,12 +29,12 @@ end
 # end
 
 ## Convex state equality constraints
-function cse_init_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem, k::Int, i::Int)
+function cse_init_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem, k::Int, j::Int, i::Int)
 	X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev(traj, traj_prev, SCPP)
 	X[i,1] - x_init[i]
 end
 
-function cse_goal_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem, k::Int, i::Int)
+function cse_goal_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem, k::Int, j::Int, i::Int)
 	X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev(traj, traj_prev, SCPP)
 	X[i,N] - x_goal[i]
 end
@@ -57,12 +57,12 @@ end
 ## Convex control equality constraints
 
 ## Convex control inequality constraints
-function cci_max_bound_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem, k::Int, i::Int)
+function cci_max_bound_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem, k::Int, j::Int, i::Int)
 	X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev(traj, traj_prev, SCPP)
 	U[i,k] - model.u_max[i]
 end
 
-function cci_min_bound_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem, k::Int, i::Int)
+function cci_min_bound_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem, k::Int, j::Int, i::Int)
 	X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev(traj, traj_prev, SCPP)
 	model.u_min[i] - U[i,k]
 end

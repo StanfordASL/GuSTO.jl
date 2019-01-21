@@ -147,8 +147,8 @@ function add_constraints_gusto_cvx(SCPV::SCPVariables, traj_prev::Trajectory, SC
 
 	update_model_params!(SCPP, traj_prev)
 
-	for (f, k, i) in (SCPC.convex_state_eq..., SCPC.dynamics...)
-		constraints += f(SCPV, traj_prev, SCPP, k, i) == 0.
+	for (f, k, j, i) in (SCPC.convex_state_eq..., SCPC.dynamics...)
+		constraints += f(SCPV, traj_prev, SCPP, k, j, i) == 0.
 	end
 
   for (f, k, i) in SCPC.convex_state_goal_ineq
@@ -184,7 +184,7 @@ function cost_nonconvex_penalty_gusto(traj, traj_prev::Trajectory, SCPC::SCPCons
 	for (f, k, j, i) in SCPC.nonconvex_state_ineq
 		J += omega*max(f(traj, traj_prev, SCPP, k, j, i), 0.)
 	end
-	for (f, k, i) in SCPC.nonconvex_state_eq
+	for (f, k, j, i) in SCPC.nonconvex_state_eq
 		J += omega*abs(f(traj, traj_prev, SCPP, k, i))
 	end
 	return J
