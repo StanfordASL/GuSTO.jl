@@ -177,7 +177,7 @@ function Trajectory(TOP::TrajectoryOptimizationProblem)
 	N, tf_guess = TOP.N, TOP.tf_guess
 	dt = tf_guess/(N-1)
 
-	Trajectory(zeros(x_dim,N), zeros(u_dim,N), tf_guess, dt)
+	Trajectory(zeros(x_dim,N), zeros(u_dim,N-1), tf_guess, dt)
 end
 
 function Base.copy!(a::Trajectory, b::Trajectory)
