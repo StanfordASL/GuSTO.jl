@@ -357,7 +357,7 @@ function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="IPOPT", 
 	iter_cap = SCPS.iterations + max_iter
 	SCPV = SCPVariables{JuMP.Variable, Array{JuMP.Variable}}()
 
-	# initialize_model_params!(SCPP, SCPS.traj)
+	initialize_model_params!(SCPP, SCPS.traj)
 	push!(SCPS.J_true, cost_true(SCPS.traj, SCPS.traj, SCPP))
 	push!(rho_vec, trust_region_ratio_gusto(SCPS.traj, SCPS.traj, SCPP))
 	param.obstacle_toggle_distance = Delta_vec[end]/8 + model.clearance # TODO: Generalize clearance
@@ -367,7 +367,7 @@ function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="IPOPT", 
 
 		# Set up, solve problem
 		SCPS.solver_model = Model(solver=IpoptSolver(; kwarg...))
-		# update_model_params!(SCPP, SCPS.traj)
+		update_model_params!(SCPP, SCPS.traj)
 		SCPC = SCPConstraints(SCPP)
 		add_variables_jump!(SCPS, SCPV, SCPP)
 		add_objective_gusto_jump!(SCPS, SCPV, SCPC, SCPP)
