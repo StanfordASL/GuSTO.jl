@@ -124,6 +124,7 @@ mutable struct SCPConstraints
 	dynamics::Vector
 	convex_state_eq::Vector
 	convex_state_ineq::Vector
+	convex_state_goal_ineq::Vector
 	nonconvex_state_eq::Vector
 	nonconvex_state_ineq::Vector
 	nonconvex_state_convexified_eq::Vector
@@ -135,7 +136,7 @@ mutable struct SCPConstraints
 	state_trust_region_ineq::Vector
 	control_trust_region_ineq::Vector
 end
-SCPConstraints() = SCPConstraints(([] for i in 1:11)...)
+SCPConstraints() = SCPConstraints(([] for i in 1:12)...)
 
 mutable struct ShootingProblem{R<:Robot, D<:DynamicsModel, E<:Environment}
 	PD::ProblemDefinition{R,D,E}
