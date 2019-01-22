@@ -4,8 +4,6 @@ export solve!
 function solve!(SS::ShootingSolution, SP::ShootingProblem)
 	model, x_init, x_goal = SP.PD.model, SP.PD.x_init, SP.PD.x_goal
 
-	@show SP.p0
-
 	# Set up shooting function
 	shooting_eval! = (F, p0) -> parameterized_shooting_eval!(F, p0, SP)
 

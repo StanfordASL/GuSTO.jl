@@ -49,7 +49,7 @@ function update_aabb!(env::ISSCorner)
   warn("Overriding collision world in env()")
 end
 
-function add_obstacles1!(env::ISSCorner)
+function add_obstacles!(env::ISSCorner)
   vars = matread(joinpath(Pkg.dir("GuSTO"), "src", "environment","iss_corner.mat"))
   for zone in vars["rectangles"]
     push!(env.obstacle_set,

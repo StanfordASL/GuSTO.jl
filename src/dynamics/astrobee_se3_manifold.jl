@@ -185,11 +185,6 @@ function update_f!(f, x::Vector, u::Vector, robot::Robot, model::AstrobeeSE3Mani
   f[4:6] = 1/robot.mass*F
 
   # SO(3)
-  # f[7] = 1/2*(-ωx*qy - ωy*qz - ωz*qw)
-  # f[8] = 1/2*( ωx*qx - ωz*qz + ωy*qw)
-  # f[9] = 1/2*( ωy*qx + ωz*qy - ωx*qw)
-  # f[10] = 1/2*(ωz*qx - ωy*qy + ωx*qz)
-
   f[7]  = 1/2*( ωz*qy - ωy*qz + ωx*qw)
   f[8]  = 1/2*(-ωz*qx + ωx*qz + ωy*qw)
   f[9]  = 1/2*( ωy*qx - ωx*qy + ωz*qw)
@@ -209,34 +204,6 @@ function update_A!(A, x::Vector, robot::Robot, model::AstrobeeSE3Manifold)
   Jxx, Jyy, Jzz = diag(robot.J)
   qx, qy, qz, qw = x[7:10] 
   ωx, ωy, ωz = x[11:13]
-
-  # A[7,8] = -ωx/2
-  # A[7,9] = -ωy/2
-  # A[7,10] = -ωz/2
-  # A[7,11] = -qy/2
-  # A[7,12] = -qz/2
-  # A[7,13] = -qw/2
-
-  # A[8,7] = ωx/2
-  # A[8,9] = -ωz/2
-  # A[8,10] = ωy/2
-  # A[8,11] = qx/2
-  # A[8,12] = qw/2
-  # A[8,13] = -qz/2
-
-  # A[9,7] = ωy/2
-  # A[9,8] = ωz/2
-  # A[9,10] = -ωx/2
-  # A[9,11] = -qw/2
-  # A[9,12] = qx/2
-  # A[9,13] = qy/2
-
-  # A[10,7] = ωz/2
-  # A[10,8] = -ωy/2
-  # A[10,9] = ωx/2
-  # A[10,11] = qz/2
-  # A[10,12] = -qy/2
-  # A[10,13] = qx/2
 
   A[7,8] = ωz/2
   A[7,9] = -ωy/2
@@ -576,27 +543,18 @@ function shooting_ode!(xdot, x, SP::ShootingProblem{Astrobee3D{T}, AstrobeeSE3Ma
   u = get_control(x, p, SP)
   F, M = u[1:3], u[4:6]
 
-  # xdot[7] = 1/2(-ωx*qy - ωy*qz - ωz*qw)  # qdot
-  # xdot[8] = 1/2( ωx*qx - ωz*qz + ωy*qw)
-  # xdot[9] = 1/2( ωy*qx + ωz*qy - ωx*qw)
-  # xdot[10] = 1/2(ωz*qx - ωy*qy + ωx*qz)
-
   # State variables
   xdot[1:3] = v                           # rdot
   xdot[4:6] = 1/mass*F                    # vdot
-  xdot[7]  = 1/2*( ωz*qy - ωy*qz + ωx*qw)  # qdot
+  xdot[7]  = 1/2*( ωz*qy - ωy*qz + ωx*qw) # qdot
   xdot[8]  = 1/2*(-ωz*qx + ωx*qz + ωy*qw)
   xdot[9]  = 1/2*( ωy*qx - ωx*qy + ωz*qw)
   xdot[10] = 1/2*(-ωx*qx - ωy*qy - ωz*qz)
   xdot[11:13] = Jinv*(M - cross(ω,J*ω))   # ωdot
 
-  # xdot[20] = -1/2( pqy*ωx + pqz*ωy + pqw*ωz)
-  # xdot[21] = -1/2(-pqx*ωx + pqz*ωz - pqw*ωy)
-  # xdot[22] = -1/2(-pqx*ωy - pqy*ωz + pqw*ωx)
-  # xdot[23] = -1/2(-pqx*ωz + pqy*ωy - pqz*ωx)
-
   # Dual variables
-  xdot[14:16] = Zeros(3)
+  xdot[14:16] = -obstacle_avoidance_penalty_grad(r, SP)
+  # xdot[14:16] = Zeros(3)
   xdot[17:19] = -pr
   xdot[20] = -1/2*(-pqy*ωz + pqz*ωy - pqw*ωx)
   xdot[21] = -1/2*( pqx*ωz - pqz*ωx - pqw*ωy)
@@ -613,10 +571,6 @@ function shooting_ode!(xdot, x, SP::ShootingProblem{Astrobee3D{T}, AstrobeeSE3Ma
         -J[1,1]*ωx + J[3,3]*ωx - J[1,2]*ωy - 2*J[1,3]*ωz
         -J[2,3]*ωx + J[1,3]*ωy]
 
-  # xdot[24] = -dot(pω, Jinv*a1) - 1/2(-pqx*qy + pqy*qx - pqz*qw + pqw*qz)
-  # xdot[25] = -dot(pω, Jinv*a2) - 1/2(-pqx*qz + pqy*qw + pqz*qx - pqw*qy)
-  # xdot[26] = -dot(pω, Jinv*a3) - 1/2(-pqx*qw - pqy*qz + pqz*qy + pqw*qx)
-
   xdot[24] = -dot(pω, Jinv*a1) - 1/2*( pqx*qw + pqy*qz - pqz*qy - pqw*qx)
   xdot[25] = -dot(pω, Jinv*a2) - 1/2*(-pqx*qz + pqy*qw + pqz*qx - pqw*qy)
   xdot[26] = -dot(pω, Jinv*a3) - 1/2*( pqx*qy - pqy*qx + pqz*qw - pqw*qz)
@@ -631,6 +585,26 @@ function get_control(x, p, SP::ShootingProblem{Astrobee3D{T}, AstrobeeSE3Manifol
   [F; M]
 end
 
+function obstacle_avoidance_penalty_grad(x, SP::ShootingProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}) where {T,E}
+  keepout_zones = SP.PD.env.keepout_zones
+  # grad = Zeros(length(r))
+  grad = [0;0;0]
+
+  for koz in keepout_zones
+    x_min, x_max = minimum(koz), maximum(koz)
+    if all(x_min .< x .< x_max)
+      grad += simple_obstacle_avoidance_penalty_grad.(x, x_min, x_max)
+    end
+  end
+
+  # TODO: Implement for obstacles, including simple geometries such as spheres
+  return grad
+end
+
+function simple_obstacle_avoidance_penalty_grad(x, x_min, x_max)
+  (x_min < x < x_max) ? -2*x + x_min + x_max : 0
+end
+
 ###########
 # Dynamics 
 ###########
@@ -642,7 +616,6 @@ function interpolate_traj(traj::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, Astr
   Nstep = ceil(Int, dt/dt_min)
   Nfull = Nstep*(N-1) + 1
   dtfull = dt/Nstep
-
 
   Ufull = Matrix(u_dim, Nfull-1)
   Xfull = Matrix(x_dim, Nfull)
