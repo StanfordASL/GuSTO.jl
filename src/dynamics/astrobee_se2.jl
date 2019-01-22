@@ -6,6 +6,7 @@ mutable struct AstrobeeSE2 <: DynamicsModel
   x_dim
   u_dim
   clearance
+  delta_goal
 
   # Parameters that can be updated
   f::Vector
@@ -17,7 +18,8 @@ function AstrobeeSE2()
   x_dim = 6
   u_dim = 3
   clearance = 0.05
-  AstrobeeSE2(x_dim, u_dim, clearance, [], [], [])
+  delta_goal = 0.01
+  AstrobeeSE2(x_dim, u_dim, clearance, delta_goal, [], [], [])
 end
 
 function SCPParam(model::AstrobeeSE2, fixed_final_time::Bool)
@@ -220,6 +222,12 @@ function csi_angular_velocity_bound(traj, traj_prev::Trajectory, SCPP::SCPProble
   return norm(X[6,k]) - robot.hard_limit_omega
 end
 
+## Convex state goal inequality constraints
+function csi_goal_region_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee2D{T}, AstrobeeSE2, E}, k::Int, i::Int) where {T,E}
+  X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_astrobeeSE2(traj, traj_prev, SCPP)
+  return norm(X[:,N]-x_goal)^2 - model.delta_goal^2
+end
+
 ## Convex control inequality constraints
 function cci_translational_accel_bound(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee2D{T}, AstrobeeSE2, E}, k::Int, i::Int) where {T,E}
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_astrobeeSE2(traj, traj_prev, SCPP)
@@ -342,15 +350,14 @@ function SCPConstraints(SCPP::SCPProblem{Astrobee2D{T}, AstrobeeSE2, E}) where {
   for i = 1:x_dim
     push!(SCPC.convex_state_eq, (cse_init_constraints, 0, i))
   end
-  for i = 1:x_dim
-    push!(SCPC.convex_state_eq, (cse_goal_constraints, 0, i))
-  end
 
   ## Convex state inequality constraints
   for k = 1:N
     push!(SCPC.convex_state_ineq, (csi_translational_velocity_bound, k, 0))
     push!(SCPC.convex_state_ineq, (csi_angular_velocity_bound, k, 0))
   end
+
+  push!(SCPC.convex_state_goal_ineq, (csi_goal_region_constraints, 0, 0))
 
   ## Nonconvex state equality constraints (convexified)
   nothing

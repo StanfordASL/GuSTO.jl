@@ -65,7 +65,7 @@ function solve_trajopt_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek",
 	SCPV = SCPVariables{Convex.Variable,Convex.Variable}(SCPP)
 	SCPC = SCPConstraints(SCPP)
 
-  update_model_params!(SCPP, SCPS.traj)
+	initialize_model_params!(SCPP, SCPS.traj)
 	push!(SCPS.J_true, cost_true(SCPS.traj, SCPS.traj, SCPP))
 	param.obstacle_toggle_distance = model.clearance + 1. # TODO(ambyld): Generalize this, workspace-dependent
 	
@@ -91,6 +91,7 @@ function solve_trajopt_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek",
       for trust_iteration in 1:max_trust_iteration
         tic()
         # Set up, solve problem
+        update_model_params!(SCPP, SCPS.traj)
 				prob.objective = cost_full_convexified_trajopt(SCPV, old_convex_traj, SCPC, SCPP)
 				prob.constraints = add_constraints_trajopt_cvx(SCPV, old_convex_traj, SCPC, SCPP)
 				Convex.solve!(prob, warmstart=!first_time)
@@ -162,6 +163,9 @@ function add_constraints_trajopt_cvx(SCPV::SCPVariables, traj_prev::Trajectory, 
   for (f, k, i) in SCPC.convex_state_eq 
 		constraints += f(SCPV, traj_prev, SCPP, k, i) == 0
 	end
+  for (f, k, i) in SCPC.convex_state_goal_ineq
+		constraints += f(SCPV, traj_prev, SCPP, k, i) <= 0
+	end
  
 	return constraints
 end
@@ -210,7 +214,7 @@ end
 function evaluate_ctol(traj::Trajectory, traj_prev::Trajectory, SCPP::SCPProblem, SCPC::SCPConstraints)
 	JNum = 0
   JDen = 0
-	constraint_list = (SCPC.convex_state_ineq..., SCPC.nonconvex_state_ineq...,SCPC.convex_state_eq...,SCPC.dynamics...,SCPC.nonconvex_state_eq...)
+	constraint_list = (SCPC.convex_state_ineq..., SCPC.nonconvex_state_ineq...,SCPC.convex_state_eq...,SCPC.convex_state_goal_ineq...,SCPC.dynamics...,SCPC.nonconvex_state_eq...)
 	if length(constraint_list) > 0
 		(f, k, i) = constraint_list[1] 	# Get first function handle
 		JtestNum = 0
