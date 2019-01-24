@@ -150,6 +150,10 @@ function add_constraints_gusto_cvx(SCPV::SCPVariables, traj_prev::Trajectory, SC
 	for (f, k, j, i) in (SCPC.convex_state_eq..., SCPC.dynamics...)
 		constraints += f(SCPV, traj_prev, SCPP, k, j, i) == 0.
 	end
+	
+  for (f, k, j, i) in SCPC.convex_state_goal_ineq
+		constraints += f(SCPV, traj_prev, SCPP, k, j, i) <= 0.
+	end
 
   for (f, k, i) in SCPC.convex_state_goal_ineq
 		constraints += f(SCPV, traj_prev, SCPP, k, i) <= 0.

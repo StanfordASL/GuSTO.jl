@@ -65,10 +65,11 @@ function PandaBot{T}() where T
   taud_max  = [1000; 1000; 1000; 1000; 1000; 1000; 1000]                        # N*m/s
 
   bubble_array = panda_bubbles()
+
   objs = Vector{BulletCollision.BulletCollisionObjectPtr}(0)
-  for bubble in bubble_array
+  for joint in 1:num_joints 
     push!(objs,
-      BulletCollision.sphere(SVector{3}(zeros(T,3)), bubble.radius))
+      BulletCollision.sphere(SVector{3}(zeros(T,3)), 0.15))
   end
   btCollisionObject = BulletCollision.compound_collision_object(objs)
 
