@@ -34,10 +34,10 @@ function PandaKin()
   clearance = 0.03
 
   p_EE_goal = zeros(3)
-  p_EE_goal_delta_error = 0.04
+  p_EE_goal_delta_error = 0.02
 
-  PandaKin(x_dim,u_dim,num_joints,[],[],[],[],self_clearance,
-            clearance,p_EE_goal,p_EE_goal_delta_error, [], [], [])
+  PandaKin(x_dim,u_dim,num_joints,[],[],[],[],self_clearance,clearance,
+            p_EE_goal,p_EE_goal_delta_error, [], [], [])
 end
 
 function SCPParam(model::PandaKin, fixed_final_time::Bool)
@@ -81,11 +81,10 @@ end
 ######
 function cost_true(traj, traj_prev::Trajectory, SCPP::SCPProblem{PandaBot{T}, PandaKin}) where T
   U,N = traj.U, SCPP.N
-  Jm = 0
+  Jm = traj.Tf^2
   for k in 1:N-1
     Jm += norm(U[:,k])^2
   end
-  Jm += traj.Tf^2
   return Jm
 end
 
@@ -417,7 +416,7 @@ function ncsi_EE_goal_constraints_negative_convexified(traj, traj_prev::Trajecto
   J_p_EE    = get_EE_jacobian(Xp[:,N], robot)
 
   p_EE_goal_min = p_EE_goal[i] - model.p_EE_goal_delta_error
-  return p_EE_goal_min - ( p_EE[i] + transpose(J_p_EE[i,:]) * (X[:,N]-Xp[:,N]))
+  return p_EE_goal_min - (p_EE[i] + transpose(J_p_EE[i,:]) * (X[:,N]-Xp[:,N]))
 end
 
 ## State trust region inequality constraints
@@ -454,10 +453,7 @@ function SCPConstraints(SCPP::SCPProblem{PandaBot{T}, PandaKin, E}) where {T,E}
   end
 
   ## Convex state inequality constraints
-  # for k =1:N, i=1:x_dim
-  #   push!(SCPC.convex_state_ineq, (csi_max_bound_constraints, k, 0, i))
-  #   push!(SCPC.convex_state_ineq, (csi_min_bound_constraints, k, 0, i))
-  # end
+  nothing
 
   ## Convex control equality constraints
   nothing
@@ -474,10 +470,6 @@ function SCPConstraints(SCPP::SCPProblem{PandaBot{T}, PandaKin, E}) where {T,E}
     push!(SCPC.nonconvex_state_ineq, (ncsi_obstacle_avoidance_constraints, k, j, i))
   end
 
-  # for k = 1:N, j = 1:length(robot.bubble_array), i = 1:j-1
-  #   push!(SCPC.nonconvex_state_ineq, (ncsi_self_avoidance_constraints,   k, j, i))
-  # end
-
   ## Nonconvex state equality constraints (convexified)
   nothing 
 
@@ -486,10 +478,6 @@ function SCPConstraints(SCPP::SCPProblem{PandaBot{T}, PandaKin, E}) where {T,E}
   for k = 1:N, j = 1:length(env_.convex_robot_components) , i = 1:length(env_.convex_env_components)
     push!(SCPC.nonconvex_state_convexified_ineq, (ncsi_obstacle_avoidance_constraints_convexified, k, j, i))
   end
-
-  # for k = 1:N, j = 1:length(robot.bubble_array), i = 1:j-1
-  #   push!(SCPC.nonconvex_state_convexified_ineq, (ncsi_self_avoidance_constraints_convexified, k, j, i))
-  # end
 
   for i = 1:3
     push!(SCPC.convex_state_goal_ineq, (ncsi_EE_goal_constraints_convexified         , N, 0, i))
@@ -529,12 +517,10 @@ function trust_region_ratio_gusto(traj, traj_prev::Trajectory, SCPP::SCPProblem{
   p_EE_cur                = get_EE_position(X[:,N],robot)
   
   linearized = (p_EE_prev + J_p_EE_prev * (X[:,N]-Xp[:,N])) - p_EE_goal_max
-  @show linearized
   num_con += sum((p_EE_cur-p_EE_goal_max) - linearized)
   den_con += sum(linearized)
 
   linearized = p_EE_goal_min - ( p_EE_prev + J_p_EE_prev * (X[:,N]-Xp[:,N]))
-  @show linearized
   num_con += sum((p_EE_goal_min-p_EE_cur) - linearized)
   den_con += sum(linearized)
   
@@ -547,8 +533,8 @@ function trust_region_ratio_gusto(traj, traj_prev::Trajectory, SCPP::SCPProblem{
       p_bubble_0    = get_joint_position(Xq0,robot,rb_idx_1)
       J_p_0         = get_joint_jacobian(Xq0,robot,rb_idx_1)
       
-      p_bubble   = get_joint_position(Xq,robot,rb_idx_1)
-      J_p_bubble = get_joint_jacobian(Xq,robot,rb_idx_1)
+      p_bubble      = get_joint_position(Xq,robot,rb_idx_1)
+      J_p_bubble    = get_joint_jacobian(Xq,robot,rb_idx_1)
       
       for (env_idx,convex_env_component) in enumerate(env_.convex_env_components)
         dist0, xbody0, xobs0 = BulletCollision.distance(env_, rb_idx_1, p_bubble_0, env_idx)
@@ -638,6 +624,36 @@ function trust_region_ratio_trajopt(traj, traj_prev::Trajectory, SCPP::SCPProble
   for i in 1:3
     num += (phi_old[i]-phi_new[i])
     den += (phi_old[i]-phi_hat_new[i]) 
+  end
+
+  # Collision avoidance checks
+  clearance, self_clearance = model.clearance, model.self_clearance
+  for k in 1:N
+    Xq,Xq0 = X[:,k], Xp[:,k]
+    
+    for (rb_idx_1,body_point) in enumerate(env_.convex_robot_components)
+      p_bubble_0    = get_joint_position(Xq0,robot,rb_idx_1)
+      J_p_0         = get_joint_jacobian(Xq0,robot,rb_idx_1)
+      
+      p_bubble      = get_joint_position(Xq,robot,rb_idx_1)
+      J_p_bubble    = get_joint_jacobian(Xq,robot,rb_idx_1)
+      
+      for (env_idx,convex_env_component) in enumerate(env_.convex_env_components)
+        dist0, xbody0, xobs0 = BulletCollision.distance(env_, rb_idx_1, p_bubble_0, env_idx)
+        phi_old = clearance - dist0
+        
+        dist,xbody,xobs = BulletCollision.distance(env_,rb_idx_1,p_bubble,env_idx)
+        nhat = dist > 0 ?
+          (xbody-xobs)./norm(xbody-xobs) :
+          (xobs-xbody)./norm(xobs-xbody) 
+
+        phi_hat_new = clearance - (dist + nhat' * J_p_0 * (Xq-Xq0))
+        phi_new = clearance-dist
+
+        num += (phi_old-phi_new)
+        den += (phi_old-phi_hat_new)
+      end
+    end
   end
 
   return num/den
@@ -813,6 +829,7 @@ function get_joint_jacobian(X::Vector,robot::PandaBot,idx::Int)
   elseif idx == 5; return Jp_panda_joint_5(X);
   elseif idx == 6; return Jp_panda_joint_6(X);
   elseif idx == 7; return Jp_panda_joint_7(X);
+  elseif idx == 8; return Jp_panda_EE(X);
   else; warn("Invalid index passed to get_joint_jacobian")
   end
 end
@@ -825,16 +842,15 @@ function get_joint_position(X::Vector,robot::PandaBot,idx::Int)
   elseif idx == 5; return p_panda_joint_5(X);
   elseif idx == 6; return p_panda_joint_6(X);
   elseif idx == 7; return p_panda_joint_7(X);
+  elseif idx == 8; return p_panda_EE(X);
   else; warn("Invalid index passed to get_joint_position")
   end
 end
 
 function get_EE_jacobian(X::Vector,robot::PandaBot)
-  warn("get_EE_jacobian returns jacobian for joint 7!")
-  return Jp_panda_joint_7(X);
+  Jp_panda_EE(X)
 end
 
 function get_EE_position(X::Vector,robot::PandaBot)
-  warn("get_EE_position returns position for joint 7!")
-  return p_panda_joint_7(X);
+  p_panda_EE(X)
 end

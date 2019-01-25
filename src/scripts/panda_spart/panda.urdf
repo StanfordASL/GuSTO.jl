@@ -243,4 +243,30 @@
     <parent link="panda_link6"/>
     <child link="panda_link7"/>
   </joint>
+  <link name="panda_ee">
+    <inertial>
+      <mass value="0"/>
+      <!-- static base, disable dynamics for this link -->
+      <origin rpy="0 0 0" xyz="0 0 0.0"/>
+      <inertia ixx="0.00381666666667" ixy="0" ixz="0" iyy="0.0036" iyz="0" izz="0.00381666666667"/>
+    </inertial>
+    <visual>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <material name="Orange"/>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <geometry>
+        <mesh filename="meshes_panda/link7.obj"/>
+      </geometry>
+    </collision>
+  </link>
+  <joint name="panda_joint8" type="revolute">
+    <origin rpy="0 0 0" xyz="0 0 0.1070"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="12" lower="-2.9671" upper="2.9671" velocity="2.6100"/>
+    <dynamics damping="0.1"/>
+    <parent link="panda_link7"/>
+    <child link="panda_ee"/>
+  </joint>
 </robot>

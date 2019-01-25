@@ -27,9 +27,6 @@ mutable struct PandaBot{T<:AbstractFloat} <: Robot
   taud_max::Vector{T}
   taud_min::Vector{T}
 
-  # collision bubbles
-  bubble_array
-
   # BulletPhysics struct
   btCollisionObject
 
@@ -64,14 +61,13 @@ function PandaBot{T}() where T
   tau_max   = [87; 87; 87; 87; 12; 12; 12]                                      # N*m
   taud_max  = [1000; 1000; 1000; 1000; 1000; 1000; 1000]                        # N*m/s
 
-  bubble_array = panda_bubbles()
-
-  objs = Vector{BulletCollision.BulletCollisionObjectPtr}(0)
-  for joint in 1:num_joints 
-    push!(objs,
-      BulletCollision.sphere(SVector{3}(zeros(T,3)), 0.15))
+  bubbles = Vector{BulletCollision.BulletCollisionObjectPtr}(0)
+  bubble_radii = [0.15; 0.15; 0.15; 0.15; 0.15; 0.15; 0.15; 0.1]
+  for bubble_idx in 1:length(bubble_radii)
+    push!(bubbles,
+      BulletCollision.sphere(SVector{3}(zeros(T,3)), bubble_radii[bubble_idx]))
   end
-  btCollisionObject = BulletCollision.compound_collision_object(objs)
+  btCollisionObject = BulletCollision.compound_collision_object(bubbles)
 
   # PandaRobot structure
   # Note that it includes the definition of all the links and their relative definition
@@ -100,7 +96,7 @@ function PandaBot{T}() where T
     q_max,q_min,qd_max,-qd_max,
     qdd_max,-qdd_max,qddd_max,-qddd_max,
     tau_max,-tau_max,taud_max,-taud_max,
-    bubble_array,btCollisionObject,pan,
+    btCollisionObject,pan,
     q,q_dot,q_ddot,state,world_frame,
     EE_id, EE_link, EE_link_frame, EE_link_point, EE_link_radius, EE_path)
 end
