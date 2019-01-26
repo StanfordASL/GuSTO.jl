@@ -28,7 +28,7 @@ function solve_SCPshooting!(TOS::TrajectoryOptimizationSolution, TOP::Trajectory
 		ss_sol = solve!(SS, SP)
 		
 		# If successful shooting runs have converged, exit
-		conv_iter_spread = 2
+		conv_iter_spread = 3
 		if SCPS.iterations > conv_iter_spread && sum(SS.convergence_measure[end-conv_iter_spread+1:end]) <= SCPS.param.convergence_threshold
 			SS.converged = true
 			# TODO: Check inequality constraints

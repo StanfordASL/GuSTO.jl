@@ -104,28 +104,6 @@ end
 
 ProbStatusTypes = Union{Symbol, MOI.TerminationStatusCode}
 
-mutable struct SCPSolution
-	traj::Trajectory
-	dual::Vector
-
-	J_true::Vector
-	J_full::Vector
-	prob_status::Vector{ProbStatusTypes}	# Solver status
-	accept_solution::Vector 							# Solution accepted?
-	convergence_measure::Vector						# Convergence measure of the latest iteration
-	successful::Bool 											# Did we find an acceptable solution?
-	converged::Bool												# Has the solution met the convergence condition?
-	iterations::Int 											# Number of SCP iterations executed
-	iter_elapsed_times::Vector
-	total_time 	# TODO(ambyld): Move to TOP
-
-	param::SCPParam
-	SCPP::SCPProblem
-	solver_model
-
-	SCPSolution(a,b,c,d,e,f,g,h,i,j,k,l,m,n) = new(a,b,c,d,e,f,g,h,i,j,k,l,m,n)
-end
-
 mutable struct SCPConstraints
 	dynamics::Dict
 	convex_state_eq::Dict
@@ -143,6 +121,29 @@ mutable struct SCPConstraints
 end
 SCPConstraints() = SCPConstraints((Dict{Symbol, ConstraintCategory}() for i in 1:11)...)
 
+mutable struct SCPSolution
+	traj::Trajectory
+	dual::Vector
+
+	J_true::Vector
+	J_full::Vector
+	prob_status::Vector{ProbStatusTypes}	# Solver status
+	accept_solution::Vector 							# Solution accepted?
+	convergence_measure::Vector						# Convergence measure of the latest iteration
+	successful::Bool 											# Did we find an acceptable solution?
+	converged::Bool												# Has the solution met the convergence condition?
+	iterations::Int 											# Number of SCP iterations executed
+	iter_elapsed_times::Vector
+	total_time 	# TODO(ambyld): Move to TOP
+
+	param::SCPParam
+	SCPP::SCPProblem
+	SCPC::SCPConstraints
+	solver_model
+
+	SCPSolution(a,b,c,d,e,f,g,h,i,j,k,l,m,n) = new(a,b,c,d,e,f,g,h,i,j,k,l,m,n)
+end
+
 mutable struct ConstraintCategory
 	func
 	dimtype
@@ -155,6 +156,7 @@ end
 
 mutable struct ShootingProblem{R,D,E} <: OptAlgorithmProblem{R,D,E}
 	PD::ProblemDefinition{R,D,E}
+	WS::Workspace
 
 	p0 	# Initial dual
 	N 	# Discretization steps
@@ -182,7 +184,7 @@ mutable struct TrajectoryOptimizationSolution
 	TrajectoryOptimizationSolution(TOP::TrajectoryOptimizationProblem) = new(Trajectory(TOP))
 end
 
-ShootingProblem(TOP::TrajectoryOptimizationProblem, SCPS::SCPSolution) = ShootingProblem(TOP.PD, SCPS.dual, TOP.N, SCPS.traj.Tf)
+ShootingProblem(TOP::TrajectoryOptimizationProblem, SCPS::SCPSolution) = ShootingProblem(TOP.PD, TOP.WS, SCPS.dual, TOP.N, SCPS.traj.Tf)
 
 TrajectoryOptimizationProblem(PD, N, tf_guess; fixed_final_time::Bool=false) = TrajectoryOptimizationProblem(PD, fixed_final_time, N, tf_guess, 1/(N-1))
 

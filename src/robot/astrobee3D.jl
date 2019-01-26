@@ -19,7 +19,7 @@ function Astrobee3D{T}() where T
 
   # flight robot param: freeflyer/astrobee/config/world/iss.config
   mass = 7.0 
-  hard_limit_vel = 0.5 # Actual limit: 0.5
+  hard_limit_vel = 0.5      # Actual limit: 0.5
   hard_limit_accel = 0.1 
   hard_limit_ω = 45*π/180 
   hard_limit_α = 50*π/180 

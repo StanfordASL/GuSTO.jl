@@ -9,7 +9,7 @@ function solve!(SS::ShootingSolution, SP::ShootingProblem)
 
 	# Run Newton method
 	time_start = time_ns()
-	sol_newton = nlsolve(shooting_eval!, SP.p0, iterations = 20) # TODO(ambyld): Make number of iterations a parameter
+	sol_newton = nlsolve(shooting_eval!, SP.p0, iterations = 10) # TODO(ambyld): Make number of iterations a parameter
 	iter_elapsed_time = (time_ns() - time_start)/10^9
 
 	if sol_newton.f_converged
@@ -44,9 +44,13 @@ function parameterized_shooting_eval!(F, p0, SP::ShootingProblem)
 	tf = SP.tf
 
 	x0 = [x_init; p0]
+	# @show "start"
 	tspan = (0., tf)
 	prob = ODEProblem(shooting_ode!, x0, tspan, SP)
+	# @show "start2"
+	time_start = time_ns()
 	sol = DifferentialEquations.solve(prob)
+	# @show "start3"
 
 	for i = 1:x_dim
 		F[i] = x_goal[i] - sol.u[end][i]
