@@ -3,7 +3,7 @@ isinstalled(pkg::AbstractString) =
 
 asl_pkgs = ["BulletCollision", "AstrobeeRobot", "PandaRobot"]
 for pkg in asl_pkgs
-  if isinstalled(pkg)
+  if pkg in keys(Pkg.installed()) 
     println("$pkg already installed")
     continue
   else

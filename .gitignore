@@ -4,3 +4,4 @@
 
 src/**/*.h5
 **/.ipynb_checkpoints
+**/.log
