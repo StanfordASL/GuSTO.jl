@@ -171,12 +171,13 @@ end
 function dynamics_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{PandaBot{T}, PandaKin, E}, k::Int, j::Int, i::Int) where {T,E}
   # Where i is the state index, and k is the timestep index
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_PandaKin(traj, traj_prev, SCPP)
-  fp, Ap, Bp = get_f(k, model), get_A(k, model), get_B(k, model)
+  fk, Ak, Bk = get_f(k, model), get_A(k, model), get_B(k, model)
   if k == N-1
-    return Tf*fp + Tfp*(Ap*(X[:,k]-Xp[:,k]) + Bp*(U[:,k]-Up[:,k])) - (X[:,k+1]-X[:,k])/dh
+    return Tf*fk + Tfp*(Ak*(X[:,k]-Xp[:,k]) + Bk*(U[:,k]-Up[:,k])) - (X[:,k+1]-X[:,k])/dh
   else
-    return 0.5*(Tf*(fp + get_f(k+1, model)) + Tfp*(Ap*(X[:,k]-Xp[:,k]) + Bp*(U[:,k]-Up[:,k])) +
-      Tfp*(Ap*(X[:,k+1]-Xp[:,k+1]) + Bp*(U[:,k+1]-Up[:,k+1]))) - (X[:,k+1]-X[:,k])/dh
+    fkp1, Akp1, Bkp1 = get_f(k+1, model), get_A(k+1, model), get_B(k+1, model)
+    return 0.5*(Tf*(fk + fkp1) + Tfp*(Ak*(X[:,k]-Xp[:,k]) + Bk*(U[:,k]-Up[:,k])) +
+      Tfp*(Akp1*(X[:,k+1]-Xp[:,k+1]) + Bkp1*(U[:,k+1]-Up[:,k+1]))) - (X[:,k+1]-X[:,k])/dh
   end
 end
 
