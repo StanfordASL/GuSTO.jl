@@ -475,7 +475,6 @@ function SCPConstraints(SCPP::SCPProblem{PandaBot{T}, PandaKin, E}) where {T,E}
   nothing 
 
   ## Nonconvex state inequality constraints (convexified)
-  env_ = WS.btenvironment_keepout
   for k = 1:N, j = 1:length(env_.convex_robot_components) , i = 1:length(env_.convex_env_components)
     push!(SCPC.nonconvex_state_convexified_ineq, (ncsi_obstacle_avoidance_constraints_convexified, k, j, i))
   end
@@ -535,7 +534,6 @@ function trust_region_ratio_gusto(traj, traj_prev::Trajectory, SCPP::SCPProblem{
       J_p_0         = get_joint_jacobian(Xq0,robot,rb_idx_1)
       
       p_bubble      = get_joint_position(Xq,robot,rb_idx_1)
-      J_p_bubble    = get_joint_jacobian(Xq,robot,rb_idx_1)
       
       for (env_idx,convex_env_component) in enumerate(env_.convex_env_components)
         dist0, xbody0, xobs0 = BulletCollision.distance(env_, rb_idx_1, p_bubble_0, env_idx)
@@ -550,37 +548,8 @@ function trust_region_ratio_gusto(traj, traj_prev::Trajectory, SCPP::SCPProblem{
         den_con += (linearized) 
       end
 
-      # # Check for self-collision 
-      # for rb_idx_2 in 1:rb_idx_1-1
-      #   RigidBodyDynamics.set_configuration!(robot.state, get_configuration(Xq0,model))
-      #   r0_bubble_2 = get_bubble_position(robot.bubble_array[rb_idx_2],robot)
-
-      #   BulletCollision.set_transformation(bubble_1, r0_bubble_1)
-      #   bubble_2 = env_.convex_robot_components[rb_idx_2]
-      #   BulletCollision.set_transformation(bubble_2, r0_bubble_2)
-
-      #   dist,xbody,xobs = BulletCollision.distance(bubble_1, bubble_2)
-      # 
-      #   RigidBodyDynamics.set_configuration!(robot.state, get_configuration(Xq0,model))
-      #   Jr_∂x = get_bubble_jacobian(robot.bubble_array[rb_idx_1],robot) * get_jacobian_embedding(Xq0,SCPP)
-
-      #   nhat = dist > 0 ?
-      #     (xbody-xobs)./norm(xbody-xobs) :
-      #     (xobs-xbody)./norm(xobs-xbody) 
-      #   linearized = clearance - (dist + nhat'*Jr_∂x*(Xq-Xq0))
-      #   
-      #   RigidBodyDynamics.set_configuration!(robot.state, get_configuration(Xq,model))
-      #   r_bubble_1 = get_bubble_position(robot.bubble_array[rb_idx_1],robot)
-      #   BulletCollision.set_transformation(bubble_1, r_bubble_1)
-
-      #   r_bubble_2 = get_bubble_position(robot.bubble_array[rb_idx_2],robot)
-      #   BulletCollision.set_transformation(bubble_2, r_bubble_2)
-
-      #   dist,xbody,xobs = BulletCollision.distance(bubble_1, bubble_2)
-
-      #   num_con += ((clearance-dist) - linearized) 
-      #   den_con += (linearized) 
-      # end
+      # Check for self-collision
+      # TODO(acauligi)
     end
   end
 
@@ -594,6 +563,7 @@ function trust_region_ratio_trajopt(traj, traj_prev::Trajectory, SCPP::SCPProble
   num,den = 0, 0 
 
   dt = traj.dt
+  env_ = WS.btenvironment_keepout
 
   # Nonlinear dynamics 
   for k in 1:N-1
@@ -637,7 +607,6 @@ function trust_region_ratio_trajopt(traj, traj_prev::Trajectory, SCPP::SCPProble
       J_p_0         = get_joint_jacobian(Xq0,robot,rb_idx_1)
       
       p_bubble      = get_joint_position(Xq,robot,rb_idx_1)
-      J_p_bubble    = get_joint_jacobian(Xq,robot,rb_idx_1)
       
       for (env_idx,convex_env_component) in enumerate(env_.convex_env_components)
         dist0, xbody0, xobs0 = BulletCollision.distance(env_, rb_idx_1, p_bubble_0, env_idx)
@@ -738,46 +707,23 @@ function verify_joint_limits(traj::Trajectory, SCPP::SCPProblem{PandaBot{T}, Pan
   return true
 end
 
-# function verify_collision_free(traj::Trajectory, SCPP::SCPProblem{PandaBot{T}, PandaKin, E}) where {T,E}
-#   model, WS = SCPP.PD.model, SCPP.WS
-#   N = SCPP.N
-# 
-#   env_ = WS.btenvironment_keepout
-#   clearance, self_clearance = model.clearance, model.self_clearance
-# 
-#   for k = 1:N
-#     RigidBodyDynamics.set_configuration!(robot.state, get_configuration(traj.X[:,k],model))
-# 
-#     for rb_idx = 1:length(env_.convex_robot_components)
-#       bubble_1 = env_.convex_robot_components[rb_idx]
-#       r1 = get_bubble_position(robot.bubble_array[rb_idx],robot)
-#       BulletCollision.set_transformation(bubble_1, r1)
-# 
-#       # Check for collision with obstacles
-#       for env_idx = 1:length(env_.convex_env_components)
-#         obs = env_.convex_env_components[env_idx] 
-#         dist,xbody,xobs = BulletCollision.distance(bubble_1, obs)
-#         if dist < 0.  # TODO(acauligi): should this be clearance?
-#           return false, k, dist
-#         end
-#       end
-# 
-#       # Check for self-collision 
-#       for idx2 in 1:rb_idx-1 
-#         bubble_2 = env_.convex_robot_components[idx2]
-#         # r2 = get_bubble_position(robot.bubble_array[idx2],robot)    # TODO(acauligi): I believe pose of bubble_2 would have
-#         # BulletCollision.set_transformation(bubble_2, r2)            #   already been updated by this point
-#         
-#         dist,xbody,xobs = BulletCollision.distance(bubble_1, bubble_2)
-#         if dist < 0.  # TODO(acauligi): should this be self_clearance?
-#           return false, k, dist
-#         end
-#       end
-#     end
-#   end
-# 
-#   return true, 0., 0.
-# end
+function verify_collision_free(traj::Trajectory, SCPP::SCPProblem{PandaBot{T}, PandaKin, E}) where {T,E}
+  model, WS = SCPP.PD.model, SCPP.WS
+  N = SCPP.N
+
+  for k in 1:N
+    for rb_idx in 1:length(env_.convex_robot_components)
+      for env_idx in 1:length(env_.convex_env_components)
+        p_joint  = get_joint_position(X[:,k],robot,rb_idx)
+        dist,xbody,xobs = BulletCollision.distance(env_,rb_idx,p_joint,env_idx)
+        if dist < 0
+          return false
+        end
+      end
+    end
+  end
+  return true
+end
 
 """
   x1 = cos(θ), x2 = sin(θ) 	( x1²+x2² ) = 1
