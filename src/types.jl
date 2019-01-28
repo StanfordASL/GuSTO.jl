@@ -112,6 +112,12 @@ mutable struct SCPConstraints
 	nonconvex_state_ineq::Dict
 	nonconvex_state_convexified_eq::Dict
 	nonconvex_state_convexified_ineq::Dict
+	convex_state_bc_eq::Dict 
+	convex_state_bc_ineq::Dict    # TODO(acauligi): only convex_state_bc_ineq, nonconvex_state_bc_ineq, nonconvex_state_bc_convexified_ineq
+	nonconvex_state_bc_eq::Dict   #   are correctly implemented across algorithms
+	nonconvex_state_bc_ineq::Dict
+	nonconvex_state_bc_convexified_eq::Dict
+	nonconvex_state_bc_convexified_ineq::Dict
 	convex_control_eq::Dict
 	convex_control_ineq::Dict
 	# obstacle_avoidance_ineq::Vector
@@ -119,7 +125,7 @@ mutable struct SCPConstraints
 	state_trust_region_ineq::Dict
 	control_trust_region_ineq::Dict
 end
-SCPConstraints() = SCPConstraints((Dict{Symbol, ConstraintCategory}() for i in 1:11)...)
+SCPConstraints() = SCPConstraints((Dict{Symbol, ConstraintCategory}() for i in 1:17)...)
 
 mutable struct SCPSolution
 	traj::Trajectory
