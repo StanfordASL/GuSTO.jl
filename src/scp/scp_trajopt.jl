@@ -1,5 +1,5 @@
 
-export solve_trajopt_cvx!
+export solve_trajopt_jump!
 
 mutable struct SCPParam_TrajOpt <: SCPParamSpecial
   mu0         # initial penalty coefficient
@@ -29,9 +29,9 @@ function SCPParam_TrajOpt(mu0, s0, c, τ_plus, τ_minus, k, ftol, xtol, ctol,max
 end
 
 #########
-# Gurobi
+# JuMP 
 #########
-function solve_trajopt_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", max_iter=125, force=false; kwarg...)
+function solve_trajopt_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Ipopt", max_iter=125, force=false; kwarg...)
 	# Solves a sequential convex programming problem
 	# Inputs:
 	#		SCPS - SCP solution structure, including an initial trajectory
@@ -39,16 +39,9 @@ function solve_trajopt_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek",
 	#   max_iter - Set to enforce a maximum number of iterations (0 = unlimited)
 	#   force - Set true to force further refinement iterations despite convergence
 
-	if solver == "Mosek"
-		set_default_solver(MosekSolver(; kwarg...))
-	elseif solver == "Gurobi"
-		set_default_solver(GurobiSolver(; kwarg...))
-  else
-		set_default_solver(SCSSolver(; kwarg...))
-	end
-	
+
 	N = SCPP.N
-	param = SCPP.param
+	param, model = SCPP.param, SCPP.PD.model
 
 	param.alg = SCPParam_TrajOpt(SCPP.PD.model)
   mu0,s0 = param.alg.mu0, param.alg.s0
@@ -61,16 +54,15 @@ function solve_trajopt_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek",
   max_penalty_iteration,max_convex_iteration,max_trust_iteration = 
     param.alg.max_penalty_iteration, param.alg.max_convex_iteration, param.alg.max_trust_iteration
 
-	iter_cap = SCPS.iterations + max_iter
-	SCPV = SCPVariables{Convex.Variable,Convex.Variable}(SCPP)
-	SCPC = SCPConstraints(SCPP)
+  iter_cap = SCPS.iterations + max_iter
+	SCPV = SCPVariables{JuMP.VariableRef, Array{JuMP.VariableRef}}()
+	SCPS.SCPC = SCPConstraints(SCPP)
+	SCPC = SCPS.SCPC
 
   update_model_params!(SCPP, SCPS.traj)
 	push!(SCPS.J_true, cost_true(SCPS.traj, SCPS.traj, SCPP))
 	param.obstacle_toggle_distance = model.clearance + 1. # TODO(ambyld): Generalize this, workspace-dependent
 	
-	first_time = true
-  prob = minimize(0.)
   constraints_satisfied = false
   xtol_satisfied = false
 
@@ -90,26 +82,43 @@ function solve_trajopt_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek",
       end
       for trust_iteration in 1:max_trust_iteration
         time_start = time_ns()
-        # Set up, solve problem
-				prob.objective = cost_full_convexified_trajopt(SCPV, old_convex_traj, SCPC, SCPP)
-				prob.constraints = add_constraints_trajopt_cvx(SCPV, old_convex_traj, SCPC, SCPP)
-				Convex.solve!(prob, warmstart=!first_time)
-				first_time = false
 
-		    push!(SCPS.prob_status, prob.status)
-        if prob.status != :Optimal
-          warn("TrajOpt failed find optimal solution")
-		      push!(SCPS.iter_elapsed_times, (time_ns() - time_start)/10^9) 
+        if solver == "Mosek"
+          SCPS.solver_model = Model(with_optimizer(Mosek.Optimizer; kwarg...))
+        elseif solver == "Gurobi"
+          SCPS.solver_model = Model(with_optimizer(Gurobi.Optimizer; kwarg...))
+        elseif solver == "Ipopt"
+          SCPS.solver_model = Model(with_optimizer(Ipopt.Optimizer; kwarg...))
+        else 	# Default solver
+          SCPS.solver_model = Model(with_optimizer(Ipopt.Optimizer; kwarg...))
+        end
+
+        # Set up, solve problem
+        update_model_params!(SCPP, SCPS.traj)
+        add_variables_jump!(SCPS, SCPV, SCPP)
+        add_constraints_trajopt_jump!(SCPS, SCPV, SCPC, SCPP)   # TODO(acauligi)
+        add_objective_trajopt_jump!(SCPS, SCPV, SCPC, SCPP)     # TODO(acauligi)
+
+        set_start_value.(SCPV.X, SCPS.traj.X)
+        set_start_value.(SCPV.U, SCPS.traj.U)
+        set_start_value(SCPV.Tf, SCPP.tf_guess)
+
+        JuMP.optimize!(SCPS.solver_model)
+
+		    push!(SCPS.prob_status, JuMP.termination_status(SCPS.solver_model))
+        if SCPS.prob_status[end] ∉ (MOI.OPTIMAL, MOI.LOCALLY_SOLVED)
+          warn("TrajOpt iteration failed to find an optimal solution")
+          push!(SCPS.iter_elapsed_times, (time_ns() - time_start)/10^9) 
           return
         end
 
         # Recover solution
-        new_traj = Trajectory(SCPV.X.value, SCPV.U.value, SCPV.Tf.value[1])
+		    new_traj = Trajectory(JuMP.value.(SCPV.X), JuMP.value.(SCPV.U), JuMP.value.(SCPV.Tf))
         push!(xtol_vec, evaluate_xtol(new_traj, old_convex_traj, SCPP))
         push!(SCPS.convergence_measure, xtol_vec[end])
-        push!(SCPS.J_full, prob.optval)
+		    push!(SCPS.J_full, JuMP.objective_value(SCPS.solver_model))
 
-        SCPS.dual = get_dual_cvx(prob, SCPP, solver)
+		    SCPS.dual = get_dual_jump(SCPC, SCPP)
 
         # grow or shrink trust region 
         push!(ρ_vec, trust_region_ratio_trajopt(new_traj, old_convex_traj, SCPP))
@@ -150,53 +159,85 @@ function solve_trajopt_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek",
   end
 end
 
-function add_constraints_trajopt_cvx(SCPV::SCPVariables, traj_prev::Trajectory, SCPC::SCPConstraints, SCPP::SCPProblem)
+function add_constraints_trajopt_jump!(SCPS::SCPSolution, SCPV::SCPVariables, SCPC::SCPConstraints, SCPP::SCPProblem)
   s = SCPP.param.alg.s_vec[end]
-	constraints = Convex.Constraint[]
+	solver_model, traj_prev = SCPS.solver_model, SCPS.traj
 
 	update_model_params!(SCPP, traj_prev)
 
-  for (f, k, i) in SCPC.state_trust_region_ineq
-		constraints += f(SCPV, traj_prev, SCPP, k, i) - s <= 0
+  for cc in values(SCPC.state_trust_region_ineq)
+		if cc.dimtype == :scalar
+			cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)], cc.func(SCPV, traj_prev, SCPP, k, i...) - s <= 0)
+		elseif cc.dimtype == :array
+			cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)], cc.func(SCPV, traj_prev, SCPP, k, i...) - s .<= 0)
+		end
 	end
-  for (f, k, i) in SCPC.convex_state_eq 
-		constraints += f(SCPV, traj_prev, SCPP, k, i) == 0
+
+  for cc in values(merge(SCPC.convex_state_bc_ineq, SCPC.nonconvex_state_bc_convexified_ineq))
+		if cc.dimtype == :scalar
+			cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)], cc.func(SCPV, traj_prev, SCPP, k, i...) <= 0)
+		elseif cc.dimtype == :array
+			cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)], cc.func(SCPV, traj_prev, SCPP, k, i...) .<= 0)
+		end
 	end
- 
-	return constraints
-end
 
-function cost_convex_state_eq_penalty_trajopt(traj, traj_prev::Trajectory, SCPC::SCPConstraints, SCPP::SCPProblem)
-	mu = SCPP.param.alg.mu_vec[end]
-
-	J = 0
-	for (f, k, i) in (SCPC.nonconvex_state_convexified_eq..., SCPC.dynamics...)
-		J += mu*norm(f(traj, traj_prev, SCPP, k, i),1)
+  for cc in values(SCPC.convex_state_eq)
+		if cc.dimtype == :scalar
+			cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)], cc.func(SCPV, traj_prev, SCPP, k, i...) == 0)
+		elseif cc.dimtype == :array
+			cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)], cc.func(SCPV, traj_prev, SCPP, k, i...) .== 0)
+		end
 	end
-  return J
+
+  # TODO: Store constraint reference to this
+	if !SCPP.param.fixed_final_time
+		@constraint(solver_model, SCPV.Tf >= 0.1)
+	end
 end
 
-function cost_convex_ineq_penalty_trajopt(traj, traj_prev::Trajectory, SCPC::SCPConstraints, SCPP::SCPProblem)
-	mu = SCPP.param.alg.mu_vec[end]
 
-	J = 0
-	for (f, k, i) in (SCPC.convex_state_ineq..., SCPC.nonconvex_state_convexified_ineq...)
-		J += mu*max(f(traj, traj_prev, SCPP, k, i), 0)
-  end
+function add_objective_trajopt_jump!(SCPS::SCPSolution, SCPV::SCPVariables, SCPC::SCPConstraints, SCPP::SCPProblem)
+	solver_model, traj_prev = SCPS.solver_model, SCPS.traj
+	robot, model = SCPP.PD.robot, SCPP.PD.model
+	x_dim, u_dim, N = model.x_dim, model.u_dim, SCPP.N
 
-  for (f, k, i) in SCPC.convex_control_ineq
-		J += mu*max(f(traj, traj_prev, SCPP, k, i), 0)
-  end
+  mu = SCPP.param.alg.mu_vec[end]
 
-  return J
-end
+	cost_expr = cost_true_convexified(SCPV, traj_prev, SCPP)
 
-function cost_penalty_full_convexified_trajopt(traj, traj_prev::Trajectory, SCPC::SCPConstraints, SCPP::SCPProblem)
-	cost_convex_state_eq_penalty_trajopt(traj, traj_prev, SCPC, SCPP) + cost_convex_ineq_penalty_trajopt(traj, traj_prev, SCPC, SCPP)
-end
+  # Inequality constraints
+  for cc in values(merge(SCPC.convex_state_ineq,SCPC.nonconvex_state_convexified_ineq,SCPC.convex_control_ineq))
+		if cc.dimtype == :scalar
+			cc.var_reference = @variable(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)])
+			cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)],
+				mu*cc.func(SCPV, traj_prev, SCPP, k, i...) <= cc.var_reference[k,i])
+			@constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)],
+				-cc.var_reference[k,i] <= 0.)
+			cost_expr += sum(cc.var_reference[k,i] for k in cc.ind_time, i in Iterators.product(cc.ind_other...))
+			set_start_value.(cc.var_reference, 0.)
+		elseif cc.dimtype == :array
+			throw(":array type inequality constraint penalty not implemented")      # TODO(acauligi)
+		end
+	end
 
-function cost_full_convexified_trajopt(traj, traj_prev::Trajectory, SCPC::SCPConstraints, SCPP::SCPProblem)
-	cost_true_convexified(traj, traj_prev, SCPP) + cost_penalty_full_convexified_trajopt(traj, traj_prev, SCPC, SCPP)
+  # Equality constraints
+  for cc in values(merge(SCPC.nonconvex_state_convexified_eq, SCPC.dynamics))
+		if cc.dimtype == :scalar
+			cc.var_reference = @variable(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)])
+			cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)],
+				mu*cc.func(SCPV, traj_prev, SCPP, k, i...) <= cc.var_reference[k,i])
+      @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)],
+				-mu*cc.func(SCPV, traj_prev, SCPP, k, i...) <= cc.var_reference[k,i])         # TODO(acauligi): Need to track this second constraint satisfaction somehow
+			@constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)],
+				-cc.var_reference[k,i] <= 0.)
+			cost_expr += sum(cc.var_reference[k,i] for k in cc.ind_time, i in Iterators.product(cc.ind_other...))
+			set_start_value.(cc.var_reference, 0.)
+		elseif cc.dimtype == :array
+			throw(":array type equality constraint penalty not implemented")      # TODO(acauligi)
+		end
+	end
+
+	@objective(solver_model, Min, cost_expr) 
 end
 
 function evaluate_xtol(traj::Trajectory, traj_prev::Trajectory, SCPP::SCPProblem)
@@ -208,25 +249,24 @@ function evaluate_ftol(traj::Trajectory, traj_prev::Trajectory, SCPP::SCPProblem
 end
 
 function evaluate_ctol(traj::Trajectory, traj_prev::Trajectory, SCPP::SCPProblem, SCPC::SCPConstraints)
-	JNum = 0
-  JDen = 0
-	constraint_list = (SCPC.convex_state_ineq..., SCPC.nonconvex_state_ineq...,SCPC.convex_state_eq...,SCPC.dynamics...,SCPC.nonconvex_state_eq...)
-	if length(constraint_list) > 0
-		(f, k, i) = constraint_list[1] 	# Get first function handle
-		JtestNum = 0
-    JtestDen = 0
-		for (fnext, k, i) in constraint_list	# Loop through all constraints
-			if fnext == f	# Evaluate and update maximum value while considering same class of constraints
-				JtestNum = max(JtestNum, norm(fnext(traj, traj, SCPP, k, i) -fnext(traj_prev, traj_prev, SCPP, k, i)))
-        JtestDen = max(JtestDen, norm(fnext(traj, traj, SCPP, k, i)))
-			else		# Entering new class of constraints
-				JNum += JtestNum	# Add max from previous class of constraints to cost
+	JNum, JDen = 0, 0
+  JtestNum, JtestDen = 0, 0
+
+  fprev = SCPC.convex_state_ineq[1].func
+  for cc in values(merge(SCPC.convex_state_ineq, SCPC.nonconvex_state_ineq, SCPC.convex_state_bc_ineq, SCPC.nonconvex_state_bc_ineq, SCPC.convex_state_eq, SCPC.dynamics, SCPC.nonconvex_state_eq))
+    fnext = cc.func
+    for k in cc.ind_time, i in Iterators.product(cc.ind_other...)
+      if fnext == fprev	# Evaluate and update maximum value while considering same class of constraints
+        JtestNum = max(JtestNum, norm(fnext(traj, traj, SCPP, k, i...) -fnext(traj_prev, traj_prev, SCPP, k, i...)))
+        JtestDen = max(JtestDen, norm(fnext(traj, traj, SCPP, k, i...)))
+      else		# Entering new class of constraints
+        JNum += JtestNum	# Add max from previous class of constraints to cost
         JDen += JtestDen
-				f = fnext	# Update function handle representing current class of constraints
-				JtestNum = norm(fnext(traj, traj, SCPP, k, i) - fnext(traj_prev, traj_prev, SCPP, k, i)) 	# Evaluate value of first member of new class of constraints
-        JtestDen = norm(fnext(traj, traj, SCPP, k, i))
-			end
-		end
-	end
+        fprev = fnext	# Update function handle representing current class of constraints
+        JtestNum = norm(fnext(traj, traj, SCPP, k, i...) - fnext(traj_prev, traj_prev, SCPP, k, i...)) 	# Evaluate value of first member of new class of constraints
+        JtestDen = norm(fnext(traj, traj, SCPP, k, i...))
+      end
+    end
+  end
 	return JNum/JDen
 end
