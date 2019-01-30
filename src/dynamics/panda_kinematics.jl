@@ -50,8 +50,8 @@ function SCPParam_GuSTO(model::PandaKin)
   omega0 = 10.
   omegamax = 1.0e10
   epsilon = 1.0e-6
-  rho0 = 0.5 
-  rho1 = 0.9 
+  rho0 = 0.5
+  rho1 = 0.9
   beta_succ = 2.
   beta_fail = 0.5
   gamma_fail = 5.
@@ -80,10 +80,33 @@ end
 # CVX 
 ######
 function cost_true(traj, traj_prev::Trajectory, SCPP::SCPProblem{PandaBot{T}, PandaKin}) where T
-  U,N = traj.U, SCPP.N
+  N = SCPP.N
+  X,U = traj.X, traj.U
+  Xp,Up = traj_prev.X, traj_prev.U
   Jm = traj.Tf^2
   for k in 1:N-1
     Jm += norm(U[:,k])^2
+  end
+
+  for k in 2:N
+    Hess = H_pointing_constraint(Xp[:,k])
+    eigv,eigvec = eig(Hess)  
+    invalid_idx = find(eigv .<= 0)
+    eigv[invalid_idx] = 0.
+    Hess = eigvec * diagm(eigv) * eigvec'
+    quad_form = 0. 
+
+    if isposdef(-Hess)
+      # isposdef() returns false for PSD
+      # so check if -Hess is PD instead
+      warn("Hessian wasn't PSD!")
+    elseif typeof(X[:,k]) == Convex.Variable
+      quad_form = quadform(X[:,k]-Xp[:,k], Hess)
+    else
+      quad_form = (X[:,k]-Xp[:,k])' * Hess * (X[:,k]-Xp[:,k])
+    end
+
+    Jm += 0.005*(J_pointing_constraint(Xp[:,k])' * (X[:,k]-Xp[:,k]) + quad_form) 
   end
   return Jm
 end
@@ -509,6 +532,13 @@ function trust_region_ratio_gusto(traj, traj_prev::Trajectory, SCPP::SCPProblem{
     den_dyn += norm(linearized)
   end
 
+  # EE pointing constraint
+  for k in 2:N
+    linearized = get_EE_pointing_constraint(Xp[:,k],robot) + J_pointing_constraint(Xp[:,k])' * (X[:,k]-Xp[:,k])
+    num_con += (get_EE_pointing_constraint(X[:,k],robot) - linearized)
+    den_con += (linearized)
+  end
+
   # Final EE constraint
   p_EE_goal_min = model.p_EE_goal - model.p_EE_goal_delta_error
   p_EE_goal_max = model.p_EE_goal + model.p_EE_goal_delta_error
@@ -709,12 +739,14 @@ end
 
 function verify_collision_free(traj::Trajectory, SCPP::SCPProblem{PandaBot{T}, PandaKin, E}) where {T,E}
   model, WS = SCPP.PD.model, SCPP.WS
+  X,U = traj.X, traj.U
   N = SCPP.N
+  env_ = WS.btenvironment_keepout
 
   for k in 1:N
     for rb_idx in 1:length(env_.convex_robot_components)
+      p_joint  = get_joint_position(X[:,k],robot,rb_idx)
       for env_idx in 1:length(env_.convex_env_components)
-        p_joint  = get_joint_position(X[:,k],robot,rb_idx)
         dist,xbody,xobs = BulletCollision.distance(env_,rb_idx,p_joint,env_idx)
         if dist < 0
           return false
@@ -723,6 +755,23 @@ function verify_collision_free(traj::Trajectory, SCPP::SCPProblem{PandaBot{T}, P
     end
   end
   return true
+end
+
+function verify_EE_goal(traj::Trajectory, SCPP::SCPProblem{PandaBot{T}, PandaKin, E}) where {T,E}
+  N, robot, model, WS = SCPP.N, SCPP.PD.robot, SCPP.PD.model, SCPP.WS
+  X,U = traj.X, traj.U
+  env_ = WS.btenvironment_keepout
+
+  p_EE_goal = model.p_EE_goal 
+  p_EE_goal_max = p_EE_goal + model.p_EE_goal_delta_error
+  p_EE_goal_min = p_EE_goal - model.p_EE_goal_delta_error
+
+  q = get_configuration(traj.X[:,N],model)
+  RigidBodyDynamics.set_configuration!(robot.state,q)
+  p_EE = RigidBodyDynamics.Spatial.transform(robot.state, robot.EE_link_point, robot.world_frame)
+  p_EE = [val for val in p_EE.v]
+  
+  return all(p_EE - p_EE_goal_max .< 0) && all(p_EE_goal_min - p_EE .< 0)
 end
 
 """
@@ -800,4 +849,12 @@ end
 
 function get_EE_position(X::Vector,robot::PandaBot)
   p_panda_EE(X)
+end
+
+function get_EE_pointing_constraint(X::Vector,robot::PandaBot)
+  pointing_constraint(X)
+end
+
+function get_EE_J_pointing_constraint(X::Vector,robot::PandaBot)
+  J_pointing_constraint(X)
 end

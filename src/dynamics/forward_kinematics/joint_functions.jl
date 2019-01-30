@@ -24,3 +24,7 @@ include("Jp_panda_joint_7.jl")
 
 include("p_panda_EE.jl")
 include("Jp_panda_EE.jl")
+
+include("pointing_constraint.jl")
+include("J_pointing_constraint.jl")
+include("H_pointing_constraint.jl")
