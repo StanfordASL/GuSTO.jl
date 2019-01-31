@@ -24,7 +24,8 @@ function Astrobee3D{T}() where T
   hard_limit_ω = 45*π/180 
   hard_limit_α = 50*π/180 
  
-  J = 0.1083*Eye(3) 
+  # J = 0.1083*Eye(3) 
+  J = Eye(3)
   Jinv = inv(J)
 
   btCollisionObject = BulletCollision.sphere(SVector{3}(zeros(T,3)), r)

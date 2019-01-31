@@ -2,14 +2,14 @@ export solve!
 
 # TODO: add ability to enforce a goal on part of the states
 function solve!(SS::ShootingSolution, SP::ShootingProblem)
-	model, x_init, x_goal = SP.PD.model, SP.PD.x_init, SP.PD.x_goal
+	model, x_init, x_goal, tf = SP.PD.model, SP.PD.x_init, SP.PD.goal_set, SP.tf, SP.x_goal
 
 	# Set up shooting function
 	shooting_eval! = (F, p0) -> parameterized_shooting_eval!(F, p0, SP)
 
 	# Run Newton method
 	time_start = time_ns()
-	sol_newton = nlsolve(shooting_eval!, SP.p0, iterations = 10) # TODO(ambyld): Make number of iterations a parameter
+	sol_newton = nlsolve(shooting_eval!, SP.p0, iterations = 7) # TODO(ambyld): Make number of iterations a parameter
 	iter_elapsed_time = (time_ns() - time_start)/10^9
 
 	if sol_newton.f_converged
@@ -39,19 +39,18 @@ function solve!(SS::ShootingSolution, SP::ShootingProblem)
 end
 
 function parameterized_shooting_eval!(F, p0, SP::ShootingProblem)
-	model, x_init, x_goal = SP.PD.model, SP.PD.x_init, SP.PD.x_goal
+	model, x_init, x_goal, tf = SP.PD.model, SP.PD.x_init, SP.x_goal, SP.tf
 	x_dim = model.x_dim
-	tf = SP.tf
 
 	x0 = [x_init; p0]
-	# @show "start"
+	N = SP.N
 	tspan = (0., tf)
+	dt = tf/(N-1)
 	prob = ODEProblem(shooting_ode!, x0, tspan, SP)
-	# @show "start2"
 	time_start = time_ns()
-	sol = DifferentialEquations.solve(prob)
-	# @show "start3"
+	sol = DifferentialEquations.solve(prob, dtmin=dt, force_dtmin=true, saveat=dt)
 
+	# @show "success"
 	for i = 1:x_dim
 		F[i] = x_goal[i] - sol.u[end][i]
 	end

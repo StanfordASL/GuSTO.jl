@@ -44,7 +44,7 @@ function solve_SCPshooting!(TOS::TrajectoryOptimizationSolution, TOP::Trajectory
 	TOS.total_time = SCPS.total_time + sum(SS.iter_elapsed_times)
 end
 
-function solve_SCP!(TOS::TrajectoryOptimizationSolution, TOP::TrajectoryOptimizationProblem, solve_method!, init_method, solver="Mosek"; kwarg...)
+function solve_SCP!(TOS::TrajectoryOptimizationSolution, TOP::TrajectoryOptimizationProblem, solve_method!, init_method, solver="Mosek"; max_iter=50, force=false, kwarg...)
 	robot = TOP.PD.robot
 	model = TOP.PD.model
 
@@ -56,10 +56,10 @@ function solve_SCP!(TOS::TrajectoryOptimizationSolution, TOP::TrajectoryOptimiza
 	# Run SCP with initialization trajectory
 	SCPS = SCPSolution(SCPP, traj_init)
 	TOS.traj, TOS.SCPS = SCPS.traj, SCPS
-	solve_method!(SCPS, SCPP, solver; kwarg...)
+	solve_method!(SCPS, SCPP, solver, max_iter, force; kwarg...)
 end
 
-function solve_SCP!(TOS::TrajectoryOptimizationSolution, TOP::TrajectoryOptimizationProblem, solve_method!, traj_init::Trajectory, solver="Mosek"; kwarg...)
+function solve_SCP!(TOS::TrajectoryOptimizationSolution, TOP::TrajectoryOptimizationProblem, solve_method!, traj_init::Trajectory, solver="Mosek"; max_iter=50, force=false, kwarg...)
 	robot = TOP.PD.robot
 	model = TOP.PD.model
 
@@ -68,7 +68,7 @@ function solve_SCP!(TOS::TrajectoryOptimizationSolution, TOP::TrajectoryOptimiza
 	# Run SCP with initialization trajectory
 	SCPS = SCPSolution(SCPP, traj_init)
 	TOS.traj, TOS.SCPS = SCPS.traj, SCPS
-	solve_method!(SCPS, SCPP, solver; kwarg...)
+	solve_method!(SCPS, SCPP, solver, max_iter, force; kwarg...)
 end
 
 function convergence_metric(traj::Trajectory, traj_prev::Trajectory, OAP::OptAlgorithmProblem)

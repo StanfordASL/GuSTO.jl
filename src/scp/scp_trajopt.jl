@@ -109,6 +109,16 @@ function solve_trajopt_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Ipopt"
         if SCPS.prob_status[end] ∉ (MOI.OPTIMAL, MOI.LOCALLY_SOLVED)
           warn("TrajOpt iteration failed to find an optimal solution")
           push!(SCPS.iter_elapsed_times, (time_ns() - time_start)/10^9) 
+
+				prob.objective = cost_full_convexified_trajopt(SCPV, old_convex_traj, SCPC, SCPP)
+				prob.constraints = add_constraints_trajopt_cvx(SCPV, old_convex_traj, SCPC, SCPP)
+				Convex.solve!(prob, warmstart=!first_time)
+				first_time = false
+
+		    push!(SCPS.solver_status, prob.status)
+        if prob.status != :Optimal
+          warn("TrajOpt failed find optimal solution")
+		      push!(SCPS.iter_elapsed_times, (time_ns() - time_start)/10^9) 
           return
         end
 

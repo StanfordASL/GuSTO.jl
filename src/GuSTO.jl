@@ -1,5 +1,5 @@
 # __precompile__(false)
-module GuSTO
+# module GuSTO
 
 using BulletCollision
 
@@ -32,6 +32,7 @@ using LinearAlgebra
 
 const MOI = MathOptInterface
 
+include("goals.jl")
 include("types.jl")
 
 include("traj_opt.jl")
@@ -44,4 +45,4 @@ include("robot.jl")
 include("dynamics.jl")
 include("environment.jl")
 
-end
+# end

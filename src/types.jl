@@ -8,8 +8,6 @@ abstract type Environment end
 mutable struct Workspace
 	btenvironment_keepin
 	btenvironment_keepout
-
-	# signed_distances::Matrix
 end
 function Workspace(rb::Robot, env::Environment)
   btenv_keepin = BulletCollision.BulletStaticEnvironment(rb.btCollisionObject, BulletCollision.collision_world(env.worldAABBmin, env.worldAABBmax))
@@ -31,7 +29,7 @@ mutable struct ProblemDefinition{R<:Robot, D<:DynamicsModel, E<:Environment}
 	env::E
 
 	x_init
-	x_goal
+	goal_set::GoalSet
 end
 
 mutable struct Trajectory
@@ -50,8 +48,9 @@ mutable struct TrajectoryOptimizationProblem{R<:Robot, D<:DynamicsModel, E<:Envi
 	tf_guess	# Guess for final time
 	dh				# Normalized dt
 end
-function TrajectoryOptimizationProblem(PD,fixed_final_time,N,tf_guess,dh)
-  WS = Workspace(PD.robot,PD.env)
+function TrajectoryOptimizationProblem(PD, fixed_final_time, N, tf_guess, dh)
+  WS = Workspace(PD.robot, PD.env)
+  assign_timesteps!(PD.goal_set, N, tf_guess)
   TrajectoryOptimizationProblem(PD,WS,fixed_final_time,N,tf_guess,dh)
 end
 
@@ -96,34 +95,48 @@ SCPVariables(X::S,U::S) where {S<:Union{VariableTypes,Array{VariableTypes}}} = S
 SCPVariables(X::S,U::S,Tf::T) where {T <: VariableTypes, S<:Union{T,Array{T}}} = SCPVariables{T,S}(X,U,Tf)
 function SCPVariables{T,S}(SCPP::SCPProblem) where {T <: Convex.Variable, S<:Union{T,Array{T}}}
 	X = Convex.Variable(SCPP.PD.model.x_dim, SCPP.N)
-	U = Convex.Variable(SCPP.PD.model.u_dim, SCPP.N-1)
+	U = Convex.Variable(SCPP.PD.model.u_dim, SCPP.N)
 	Tf = Convex.Variable(1)
 	SCPP.param.fixed_final_time ? fix!(Tf, SCPP.tf_guess) : nothing
 	SCPVariables{T,S}(X,U,Tf)
 end
 
-ProbStatusTypes = Union{Symbol, MOI.TerminationStatusCode}
+SolverStatusTypes = Union{Symbol, MOI.TerminationStatusCode}
 
 mutable struct SCPConstraints
+	## Dynamics constraints
 	dynamics::Dict
+
+	## General state constraints
 	convex_state_eq::Dict
-	convex_state_ineq::Dict
 	nonconvex_state_eq::Dict
-	nonconvex_state_ineq::Dict
 	nonconvex_state_convexified_eq::Dict
+
+	convex_state_ineq::Dict
+	nonconvex_state_ineq::Dict
 	nonconvex_state_convexified_ineq::Dict
-	convex_state_bc_eq::Dict 
-	convex_state_bc_ineq::Dict    # TODO(acauligi): only convex_state_bc_ineq, nonconvex_state_bc_ineq, nonconvex_state_bc_convexified_ineq
-	nonconvex_state_bc_eq::Dict   #   are correctly implemented across algorithms
-	nonconvex_state_bc_ineq::Dict
-	nonconvex_state_bc_convexified_eq::Dict
-	nonconvex_state_bc_convexified_ineq::Dict
+
+	## Boundary condition state constraints
+	convex_state_boundary_condition_eq::Dict
+	nonconvex_state_boundary_condition_eq::Dict
+	nonconvex_state_boundary_condition_convexified_eq::Dict
+
+	# These should be approximations of equality constraints,
+	# and treated as equality constraints in the shooting method
+	convex_state_boundary_condition_ineq::Dict
+	nonconvex_state_boundary_condition_ineq::Dict
+	nonconvex_state_boundary_condition_convexified_ineq::Dict
+
+	## Control constraints
 	convex_control_eq::Dict
 	convex_control_ineq::Dict
-	# obstacle_avoidance_ineq::Vector
-	# obstacle_avoidance_convexified_ineq::Vector
+
+	## Trust region constraints
 	state_trust_region_ineq::Dict
 	control_trust_region_ineq::Dict
+	
+	# TODO(acauligi): only convex_state_bc_ineq, nonconvex_state_bc_ineq, nonconvex_state_bc_convexified_ineq
+	#   are correctly implemented across algorithms
 end
 SCPConstraints() = SCPConstraints((Dict{Symbol, ConstraintCategory}() for i in 1:17)...)
 
@@ -133,12 +146,14 @@ mutable struct SCPSolution
 
 	J_true::Vector
 	J_full::Vector
-	prob_status::Vector{ProbStatusTypes}	# Solver status
-	accept_solution::Vector 							# Solution accepted?
-	convergence_measure::Vector						# Convergence measure of the latest iteration
-	successful::Bool 											# Did we find an acceptable solution?
-	converged::Bool												# Has the solution met the convergence condition?
-	iterations::Int 											# Number of SCP iterations executed
+	solver_status::Vector{SolverStatusTypes}	# Solver status
+	scp_status::Vector											 	# SCP algorithm status
+	accept_solution::Vector 									# Solution accepted?
+	
+	convergence_measure::Vector								# Convergence measure of the latest iteration
+	successful::Bool 													# Did we find an acceptable solution?
+	converged::Bool														# Has the solution met the convergence condition?
+	iterations::Int 													# Number of SCP iterations executed
 	iter_elapsed_times::Vector
 	total_time 	# TODO(ambyld): Move to TOP
 
@@ -147,7 +162,7 @@ mutable struct SCPSolution
 	SCPC::SCPConstraints
 	solver_model
 
-	SCPSolution(a,b,c,d,e,f,g,h,i,j,k,l,m,n) = new(a,b,c,d,e,f,g,h,i,j,k,l,m,n)
+	SCPSolution(a,b,c,d,e,f,g,h,i,j,k,l,m,n,o) = new(a,b,c,d,e,f,g,h,i,j,k,l,m,n,o)
 end
 
 mutable struct ConstraintCategory
@@ -155,9 +170,11 @@ mutable struct ConstraintCategory
 	dimtype
 	ind_time
 	ind_other
+	params
 	con_reference
 	var_reference
 	ConstraintCategory(a,b,c,d) = new(a,b,c,d)
+	ConstraintCategory(a,b,c,d,e) = new(a,b,c,d,e)
 end
 
 mutable struct ShootingProblem{R,D,E} <: OptAlgorithmProblem{R,D,E}
@@ -167,6 +184,7 @@ mutable struct ShootingProblem{R,D,E} <: OptAlgorithmProblem{R,D,E}
 	p0 	# Initial dual
 	N 	# Discretization steps
 	tf  # Final time
+	x_goal
 end
 
 mutable struct ShootingSolution
@@ -190,14 +208,18 @@ mutable struct TrajectoryOptimizationSolution
 	TrajectoryOptimizationSolution(TOP::TrajectoryOptimizationProblem) = new(Trajectory(TOP))
 end
 
-ShootingProblem(TOP::TrajectoryOptimizationProblem, SCPS::SCPSolution) = ShootingProblem(TOP.PD, TOP.WS, SCPS.dual, TOP.N, SCPS.traj.Tf)
+function ShootingProblem(TOP::TrajectoryOptimizationProblem, SCPS::SCPSolution)
+	goal_set, tf_guess = TOP.PD.goal_set, TOP.tf_guess
+	x_goal = get_first_goal_at_time(goal_set, tf_guess).params.point
+	ShootingProblem(TOP.PD, TOP.WS, SCPS.dual, TOP.N, SCPS.traj.Tf, x_goal)
+end
 
 TrajectoryOptimizationProblem(PD, N, tf_guess; fixed_final_time::Bool=false) = TrajectoryOptimizationProblem(PD, fixed_final_time, N, tf_guess, 1/(N-1))
 
 # Initialize a blank trajectory optimization solution
 # TrajectoryOptimizationSolution(TOP::TrajectoryOptimizationProblem) = TrajectoryOptimizationSolution(Trajectory(TOP))
 
-SCPSolution(SCPP::SCPProblem, traj_init::Trajectory) = SCPSolution(traj_init, [], [], [], [:(NA)], [true], [0.], false, false, 0, [0.], 0., SCPP.param, SCPP)
+SCPSolution(SCPP::SCPProblem, traj_init::Trajectory) = SCPSolution(traj_init, [], [], [], [:(NA)], [:(NA)], [true], [0.], false, false, 0, [0.], 0., SCPP.param, SCPP)
 
 Trajectory(X, U, Tf) = Trajectory(X, U, Tf, Tf/(size(X,2)-1))
 
@@ -208,7 +230,7 @@ function Trajectory(TOP::TrajectoryOptimizationProblem)
 	N, tf_guess = TOP.N, TOP.tf_guess
 	dt = tf_guess/(N-1)
 
-	Trajectory(zeros(x_dim,N), zeros(u_dim,N-1), tf_guess, dt)
+	Trajectory(zeros(x_dim,N), zeros(u_dim,N), tf_guess, dt)
 end
 
 function Base.copy!(a::Trajectory, b::Trajectory)

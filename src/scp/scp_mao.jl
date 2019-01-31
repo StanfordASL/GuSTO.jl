@@ -59,7 +59,7 @@ function solve_mao_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", max
     Convex.solve!(prob,warmstart=!first_time)
     first_time = false
 
-		push!(SCPS.prob_status, prob.status)
+		push!(SCPS.solver_status, prob.status)
     if prob.status != :Optimal
       warn("SCP-Mao failed find optimal solution")
 		  push!(SCPS.iter_elapsed_times, (time_ns() - time_start)/10^9) 
