@@ -36,7 +36,7 @@ function PandaKin()
   clearance = 0.03
 
   p_EE_goal = zeros(3)
-  p_EE_goal_delta_error = 0.02
+  p_EE_goal_delta_error = 0.1
 
   pointing_tol = 0.1
 
@@ -491,7 +491,7 @@ function SCPConstraints(SCPP::SCPProblem{PandaBot{T}, PandaKin, E}) where {T,E}
   end
 
   for k = 2:N
-    push!(SCPC.nonconvex_state_ineq, (ncsi_EE_pointing_constraint, k, 0, 0))
+    # push!(SCPC.nonconvex_state_ineq, (ncsi_EE_pointing_constraint, k, 0, 0))
   end
 
   ## Nonconvex state equality constraints (convexified)
@@ -503,7 +503,7 @@ function SCPConstraints(SCPP::SCPProblem{PandaBot{T}, PandaKin, E}) where {T,E}
   end
 
   for k = 2:N
-    push!(SCPC.nonconvex_state_convexified_ineq, (ncsi_EE_pointing_constraint_convexified, k, 0, 0))
+    # push!(SCPC.nonconvex_state_convexified_ineq, (ncsi_EE_pointing_constraint_convexified, k, 0, 0))
   end
 
   for i = 1:3
@@ -537,11 +537,11 @@ function trust_region_ratio_gusto(traj, traj_prev::Trajectory, SCPP::SCPProblem{
   end
 
   # EE pointing constraint
-  for k in 2:N
-    linearized = get_EE_pointing_constraint(Xp[:,k],robot) + J_pointing_constraint(Xp[:,k])' * (X[:,k]-Xp[:,k])
-    num_con += (get_EE_pointing_constraint(X[:,k],robot) - linearized)
-    den_con += (linearized)
-  end
+  # for k in 2:N
+  #   linearized = get_EE_pointing_constraint(Xp[:,k],robot) + J_pointing_constraint(Xp[:,k])' * (X[:,k]-Xp[:,k])
+  #   num_con += (get_EE_pointing_constraint(X[:,k],robot) - linearized)
+  #   den_con += (linearized)
+  # end
 
   # Final EE constraint
   p_EE_goal_min = model.p_EE_goal - model.p_EE_goal_delta_error
