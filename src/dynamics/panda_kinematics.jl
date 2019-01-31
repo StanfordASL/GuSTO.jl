@@ -20,6 +20,8 @@ mutable struct PandaKin <: DynamicsModel
   p_EE_goal::Vector
   p_EE_goal_delta_error
 
+  pointing_tol
+
   # Parameters that can be updated
   f::Vector
   A::Vector
@@ -36,8 +38,10 @@ function PandaKin()
   p_EE_goal = zeros(3)
   p_EE_goal_delta_error = 0.02
 
+  pointing_tol = 0.1
+
   PandaKin(x_dim,u_dim,num_joints,[],[],[],[],self_clearance,clearance,
-            p_EE_goal,p_EE_goal_delta_error, [], [], [])
+            p_EE_goal,p_EE_goal_delta_error, pointing_tol, [], [], [])
 end
 
 function SCPParam(model::PandaKin, fixed_final_time::Bool)
@@ -86,27 +90,6 @@ function cost_true(traj, traj_prev::Trajectory, SCPP::SCPProblem{PandaBot{T}, Pa
   Jm = traj.Tf^2
   for k in 1:N-1
     Jm += norm(U[:,k])^2
-  end
-
-  for k in 2:N
-    Hess = H_pointing_constraint(Xp[:,k])
-    eigv,eigvec = eig(Hess)  
-    invalid_idx = find(eigv .<= 0)
-    eigv[invalid_idx] = 0.
-    Hess = eigvec * diagm(eigv) * eigvec'
-    quad_form = 0. 
-
-    if isposdef(-Hess)
-      # isposdef() returns false for PSD
-      # so check if -Hess is PD instead
-      warn("Hessian wasn't PSD!")
-    elseif typeof(X[:,k]) == Convex.Variable
-      quad_form = quadform(X[:,k]-Xp[:,k], Hess)
-    else
-      quad_form = (X[:,k]-Xp[:,k])' * Hess * (X[:,k]-Xp[:,k])
-    end
-
-    Jm += 0.005*(J_pointing_constraint(Xp[:,k])' * (X[:,k]-Xp[:,k]) + quad_form) 
   end
   return Jm
 end
@@ -332,6 +315,12 @@ function ncsi_EE_goal_constraints_negative(traj, traj_prev::Trajectory, SCPP::SC
   return p_EE_goal_min - p_EE[i]
 end
 
+function ncsi_EE_pointing_constraint(traj, traj_prev::Trajectory, SCPP::SCPProblem, k::Int, j::Int, i::Int)
+  X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_PandaKin(traj, traj_prev, SCPP)
+    
+  return pointing_constraint(X[:,k]) - model.pointing_tol 
+end
+
 ## Nonconvex state equality constraints (convexified)
 function ncse_unit_norm_constraints_convexified(traj, traj_prev::Trajectory, SCPP::SCPProblem{PandaBot{T}, PandaKin, E}, k::Int, j::Int, i::Int) where {T,E}
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_PandaKin(traj, traj_prev, SCPP)
@@ -443,6 +432,13 @@ function ncsi_EE_goal_constraints_negative_convexified(traj, traj_prev::Trajecto
   return p_EE_goal_min - (p_EE[i] + transpose(J_p_EE[i,:]) * (X[:,N]-Xp[:,N]))
 end
 
+function ncsi_EE_pointing_constraint_convexified(traj, traj_prev::Trajectory, SCPP::SCPProblem, k::Int, j::Int, i::Int)
+  X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_PandaKin(traj, traj_prev, SCPP)
+
+  J_p = J_pointing_constraint(Xp[:,k])
+  return (pointing_constraint(Xp[:,k]) + transpose(J_p) * (X[:,k]-Xp[:,k]))- model.pointing_tol 
+end
+
 ## State trust region inequality constraints
 function stri_state_trust_region(traj, traj_prev::Trajectory, SCPP::SCPProblem{PandaBot{T}, PandaKin, E}, k::Int, i::Int) where {T,E}
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_PandaKin(traj, traj_prev, SCPP)
@@ -494,12 +490,20 @@ function SCPConstraints(SCPP::SCPProblem{PandaBot{T}, PandaKin, E}) where {T,E}
     push!(SCPC.nonconvex_state_ineq, (ncsi_obstacle_avoidance_constraints, k, j, i))
   end
 
+  for k = 2:N
+    push!(SCPC.nonconvex_state_ineq, (ncsi_EE_pointing_constraint, k, 0, 0))
+  end
+
   ## Nonconvex state equality constraints (convexified)
   nothing 
 
   ## Nonconvex state inequality constraints (convexified)
   for k = 1:N, j = 1:length(env_.convex_robot_components) , i = 1:length(env_.convex_env_components)
     push!(SCPC.nonconvex_state_convexified_ineq, (ncsi_obstacle_avoidance_constraints_convexified, k, j, i))
+  end
+
+  for k = 2:N
+    push!(SCPC.nonconvex_state_convexified_ineq, (ncsi_EE_pointing_constraint_convexified, k, 0, 0))
   end
 
   for i = 1:3
