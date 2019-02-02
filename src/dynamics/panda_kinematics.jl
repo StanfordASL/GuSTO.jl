@@ -36,9 +36,9 @@ function PandaKin()
   clearance = 0.03
 
   p_EE_goal = zeros(3)
-  p_EE_goal_delta_error = 0.1
+  p_EE_goal_delta_error = 0.02
 
-  pointing_tol = 0.1
+  pointing_tol = 0.01
 
   PandaKin(x_dim,u_dim,num_joints,[],[],[],[],self_clearance,clearance,
             p_EE_goal,p_EE_goal_delta_error, pointing_tol, [], [], [])
@@ -185,6 +185,30 @@ function dynamics_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{Pand
     return 0.5*(Tf*(fk + fkp1) + Tfp*(Ak*(X[:,k]-Xp[:,k]) + Bk*(U[:,k]-Up[:,k])) +
       Tfp*(Akp1*(X[:,k+1]-Xp[:,k+1]) + Bkp1*(U[:,k+1]-Up[:,k+1]))) - (X[:,k+1]-X[:,k])/dh
   end
+
+  # # p previous, n next
+  # Xk, Uk, Xkn = X[:,k], U[:,k], X[:,k+1]
+  # fpk, Apk, Bpk, Xpk, Upk = get_f(k, model), get_A(k, model), get_B(k, model), Xp[:,k], Up[:,k]
+
+  # # Forward Euler rule
+  # if k == N-1
+  #   return (Xk-Xkn)*N + Tf.*(fpk + Apk*(Xk-Xpk) + Bpk*(Uk-Upk))
+  # else
+  #   Ukn = U[:,k+1]
+  #   fpkn, Apkn, Bpkn, Xpkn, Upkn = get_f(k+1, model), get_A(k+1, model), get_B(k+1, model), Xp[:,k+1], Up[:,k+1]
+  #   # Trapezoidal rule
+  #   if k == 1
+  #     return (Xk-Xkn)*N + 1/2*Tf.*(fpk  + Apk *(Xk-Xpk)   + Bpk *(Uk-Upk) +
+  #                                  fpkn + Apkn*(Xkn-Xpkn) + Bpkn*(Ukn-Upkn))
+  #   # Simpson's rule
+  #   else
+  #     Xkp, Ukp = X[:,k-1], U[:,k-1]
+  #     fpkp, Apkp, Bpkp, Xpkp, Upkp  = get_f(k-1, model), get_A(k-1, model), get_B(k-1, model), Xp[:,k-1], Up[:,k-1]
+  #     return (Xkp-Xkn)*N + 1/6*Tf.*(fpkp + Apkp*(Xkp-Xpkp) + Bpkp*(Ukp-Upkp) +
+  #                                4*(fpk  + Apk *(Xk-Xpk)   + Bpk *(Uk-Upk)) +
+  #                                   fpkn + Apkn*(Xkn-Xpkn) + Bpkn*(Ukn-Upkn))
+  #   end
+  # end
 end
 
 # Get current dynamics structures for a time step
@@ -239,10 +263,10 @@ end
 ## Convex control inequality constraints
 
 ## Nonconvex state equality constraints
-function ncse_unit_norm_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{PandaBot{T}, PandaKin, E}, k::Int, j::Int, i::Int) where {T,E}
+function ncse_manifold_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{PandaBot{T}, PandaKin, E}, k::Int, j::Int, i::Int) where {T,E}
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_PandaKin(traj, traj_prev, SCPP)
 
-  X[i,k]^2 + X[i+1,k]^2 - 1. 
+  X[i,k]^2 + X[i+1,k]^2 - 1.
 end
 
 """ 
@@ -322,11 +346,12 @@ function ncsi_EE_pointing_constraint(traj, traj_prev::Trajectory, SCPP::SCPProbl
 end
 
 ## Nonconvex state equality constraints (convexified)
-function ncse_unit_norm_constraints_convexified(traj, traj_prev::Trajectory, SCPP::SCPProblem{PandaBot{T}, PandaKin, E}, k::Int, j::Int, i::Int) where {T,E}
+function ncse_manifold_constraints_convexified(traj, traj_prev::Trajectory, SCPP::SCPProblem{PandaBot{T}, PandaKin, E}, k::Int, j::Int, i::Int) where {T,E}
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_PandaKin(traj, traj_prev, SCPP)
 
+  # grad = 4*(Xp[i,k]^2 + Xp[i+1,k]^2 - 1.)*Xp[i:i+1,k] 
   grad = 2*Xp[i:i+1,k] 
-  Xp[i,k]^2 + Xp[i+1,k]^2 - 1. + grad'*(X[i:i+1,] - Xp[i:i+1,k])
+  Xp[i,k]^2 + Xp[i+1,k]^2 - 1. + transpose(grad)*(X[i:i+1,k] - Xp[i:i+1,k])
 end
 
 """ 
@@ -482,7 +507,9 @@ function SCPConstraints(SCPP::SCPProblem{PandaBot{T}, PandaKin, E}) where {T,E}
   nothing
 
   ## Nonconvex state equality constraints
-  nothing
+  for k = 1:N, i = 1:2:model.x_dim
+    # push!(SCPC.nonconvex_state_eq, (ncse_manifold_constraints, k, 0, i))
+  end
 
   ## Nonconvex state inequality constraints
   env_ = WS.btenvironment_keepout
@@ -490,20 +517,22 @@ function SCPConstraints(SCPP::SCPProblem{PandaBot{T}, PandaKin, E}) where {T,E}
     push!(SCPC.nonconvex_state_ineq, (ncsi_obstacle_avoidance_constraints, k, j, i))
   end
 
-  for k = 2:N
-    # push!(SCPC.nonconvex_state_ineq, (ncsi_EE_pointing_constraint, k, 0, 0))
+  for k = [40, 80]
+    push!(SCPC.nonconvex_state_ineq, (ncsi_EE_pointing_constraint, k, 0, 0))
   end
 
   ## Nonconvex state equality constraints (convexified)
-  nothing 
+  for k = 1:N, i = 1:2:model.x_dim
+    # push!(SCPC.nonconvex_state_convexified_eq, (ncse_manifold_constraints_convexified, k, 0, i))
+  end
 
   ## Nonconvex state inequality constraints (convexified)
   for k = 1:N, j = 1:length(env_.convex_robot_components) , i = 1:length(env_.convex_env_components)
     push!(SCPC.nonconvex_state_convexified_ineq, (ncsi_obstacle_avoidance_constraints_convexified, k, j, i))
   end
 
-  for k = 2:N
-    # push!(SCPC.nonconvex_state_convexified_ineq, (ncsi_EE_pointing_constraint_convexified, k, 0, 0))
+  for k = [40, 80]
+    push!(SCPC.nonconvex_state_convexified_ineq, (ncsi_EE_pointing_constraint_convexified, k, 0, 0))
   end
 
   for i = 1:3
@@ -536,12 +565,23 @@ function trust_region_ratio_gusto(traj, traj_prev::Trajectory, SCPP::SCPProblem{
     den_dyn += norm(linearized)
   end
 
+  # Manifold constraints
+  for k in 1:N
+    for i in 1:2:model.x_dim
+      # grad = 4*(Xp[i,k]^2 + Xp[i+1,k]^2 - 1.)*Xp[i:i+1,k] 
+      grad = 2*Xp[i:i+1,k] 
+      linearized = Xp[i,k]^2 + Xp[i+1,k]^2 - 1. + grad'*(X[i:i+1,k] - Xp[i:i+1,k])
+      # num_con += (X[i,k]^2 + X[i+1,k]^2 - 1. - linearized)
+      # den_con += (linearized)
+    end
+  end
+
   # EE pointing constraint
-  # for k in 2:N
-  #   linearized = get_EE_pointing_constraint(Xp[:,k],robot) + J_pointing_constraint(Xp[:,k])' * (X[:,k]-Xp[:,k])
-  #   num_con += (get_EE_pointing_constraint(X[:,k],robot) - linearized)
-  #   den_con += (linearized)
-  # end
+  for k in [40, 80]
+    linearized = get_EE_pointing_constraint(Xp[:,k],robot) + J_pointing_constraint(Xp[:,k])' * (X[:,k]-Xp[:,k])
+    num_con += (get_EE_pointing_constraint(X[:,k],robot) - linearized)
+    den_con += (linearized)
+  end
 
   # Final EE constraint
   p_EE_goal_min = model.p_EE_goal - model.p_EE_goal_delta_error
@@ -606,6 +646,18 @@ function trust_region_ratio_trajopt(traj, traj_prev::Trajectory, SCPP::SCPProble
     phi_hat_new = norm(dynamics_constraints(traj,traj_prev,SCPP,k,0,0), 1)
     num += (phi_old-phi_new)
     den += (phi_old-phi_hat_new) 
+  end
+
+  # Manifold constraints
+  for k in 1:N
+    for i in 1:2:model.x_dim
+      grad = 2*Xp[i:i+1,k] 
+      phi_old = Xp[i,k]^2 + Xp[i+1,k]^2 - 1.
+      phi_new = X[i,k]^2 + X[i+1,k]^2 - 1.
+      phi_hat_new = Xp[i,k]^2 + Xp[i+1,k]^2 - 1. + grad'*(X[i:i+1,k] - Xp[i:i+1,k])
+      num += (phi_old-phi_new)
+      den += (phi_old-phi_hat_new) 
+    end
   end
 
   # Final EE constraint
