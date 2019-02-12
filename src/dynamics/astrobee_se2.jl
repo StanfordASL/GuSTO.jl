@@ -5,6 +5,7 @@ mutable struct AstrobeeSE2 <: DynamicsModel
   # state: r v p omega
   x_dim
   u_dim
+
   clearance
 
   # Parameters that can be updated
@@ -16,8 +17,11 @@ end
 function AstrobeeSE2()
   x_dim = 6
   u_dim = 3
+
   clearance = 0.05
-  AstrobeeSE2(x_dim, u_dim, clearance, [], [], [])
+  AstrobeeSE2(x_dim, u_dim,
+              clearance, 
+              [], [], [])
 end
 
 function SCPParam(model::AstrobeeSE2, fixed_final_time::Bool)

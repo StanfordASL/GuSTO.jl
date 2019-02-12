@@ -8,6 +8,8 @@ include("dynamics/airplane.jl")
 include("dynamics/dubins_car.jl")
 include("dynamics/doubleint_r2.jl")
 
+export get_dt_from_SCPP, get_params_from_SCPP
+
 macro constraint_abbrev(traj, traj_prev, SCPP)
 	quote
 		X, U, Tf = $(esc(traj)).X, $(esc(traj)).U, $(esc(traj)).Tf
@@ -64,4 +66,36 @@ end
 function cci_min_bound_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem, k::Int, i::Int)
 	X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev(traj, traj_prev, SCPP)
 	model.u_min[i] - U[i,k]
+end
+
+
+
+
+
+##########################
+# Chance constrained MPC #
+##########################
+macro get_dt_from_SCPP(SCPP)
+	quote
+	    (($(esc(SCPP)).dh)*($(esc(SCPP)).tf_guess))
+	end
+end
+macro get_params_from_SCPP(SCPP)
+	quote
+	    robot, model  = $(esc(SCPP)).PD.robot, $(esc(SCPP)).PD.model
+	    x_dim, u_dim  = model.x_dim, model.u_dim
+	    N, dh, tf, dt = $(esc(SCPP)).N, $(esc(SCPP)).dh, $(esc(SCPP)).tf_guess, ($(esc(SCPP)).dh)*($(esc(SCPP)).tf_guess)
+	    
+	    robot, model, x_dim, u_dim, N, dh, tf, dt
+	end
+end
+
+
+# Get an approximation for the next state given by the dynamics \dot{x} = f(x,u) 
+function f_dt(x::Vector{T}, u_step::Vector{T}, SCPP::SCPProblem) where T<:AbstractFloat
+    return (x + f_dyn(x, u_step, SCPP.PD.robot, SCPP.PD.model) * @get_dt_from_SCPP(SCPP))
+end
+function f_dt_dx(x::Vector{T}, u_step::Vector{T}, SCPP::SCPProblem) where T<:AbstractFloat
+    # \dot{x} = f(x,u) => x_{k+1} \approx x_{k} + f(x,u)*dt    
+	return (eye(model.x_dim) + A_dyn(x, u_step, SCPP.PD.robot, SCPP.PD.model) * @get_dt_from_SCPP(SCPP))
 end

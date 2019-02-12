@@ -101,8 +101,12 @@ function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", m
 				push!(omega_vec, omega_vec[end])
 			else
 				push!(SCPS.accept_solution, true)
-				rho_vec[end] < rho0 ? push!(Delta_vec, min(beta_succ*Delta_vec[end], Delta0)) : push!(Delta_vec, Delta_vec[end])
-				!convex_ineq_satisfied_vec[end] ? push!(omega_vec, gamma_fail*omega_vec[end]) : push!(omega_vec, omega0)
+				rho_vec[end] < rho0 ? 
+					push!(Delta_vec, min(beta_succ*Delta_vec[end], Delta0)) : 
+					push!(Delta_vec, Delta_vec[end])
+				!convex_ineq_satisfied_vec[end] ? 
+					push!(omega_vec, gamma_fail*omega_vec[end]) : 
+					push!(omega_vec, omega0)
 			end
 		else
 			println("SCPS.accept_solution, false")
@@ -295,9 +299,6 @@ function add_objective_gusto_jump!(SCPS::SCPSolution, SCPV::SCPVariables, SCPC::
 	x_dim, u_dim, N = model.x_dim, model.u_dim, SCPP.N
 	omega, Delta = SCPP.param.alg.omega_vec[end], SCPP.param.alg.Delta_vec[end]
 
-	U = SCPV.U
-	N, dt = SCPP.N, SCPP.tf_guess/SCPP.N
-
 	# Add penalized constraints:
 	N_stri = length(SCPC.state_trust_region_ineq)
 	N_csi = length(SCPC.convex_state_ineq)
@@ -354,7 +355,6 @@ function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="IPOPT", 
 	Delta_vec, omega_vec, rho_vec = param.alg.Delta_vec, param.alg.omega_vec, param.alg.rho_vec
 	trust_region_satisfied_vec, convex_ineq_satisfied_vec = param.alg.trust_region_satisfied_vec, param.alg.convex_ineq_satisfied_vec
 
-	iter_cap = SCPS.iterations + max_iter
 	SCPV = SCPVariables{JuMP.Variable, Array{JuMP.Variable}}()
 
 	initialize_model_params!(SCPP, SCPS.traj)
@@ -405,8 +405,12 @@ function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="IPOPT", 
 				push!(omega_vec, omega_vec[end])
 			else
 				push!(SCPS.accept_solution, true)
-				rho_vec[end] < rho0 ? push!(Delta_vec, min(beta_succ*Delta_vec[end], Delta0)) : push!(Delta_vec, Delta_vec[end])
-				!convex_ineq_satisfied_vec[end] ? push!(omega_vec, gamma_fail*omega_vec[end]) : push!(omega_vec, omega0)
+				rho_vec[end] < rho0 ? 
+					push!(Delta_vec, min(beta_succ*Delta_vec[end], Delta0)) : 
+					push!(Delta_vec, Delta_vec[end])
+				!convex_ineq_satisfied_vec[end] ? 
+					push!(omega_vec, gamma_fail*omega_vec[end]) : 
+					push!(omega_vec, omega0)
 			end
 		else
 			push!(SCPS.accept_solution, false)
@@ -436,9 +440,8 @@ function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="IPOPT", 
 			warn("GuSTO SCP omegamax exceeded")
 			break
 		end
+
 		!SCPS.accept_solution[end] ? continue : nothing
-
-
 
 		push!(SCPS.J_true, cost_true(new_traj, SCPS.traj, SCPP))
 		copy!(SCPS.traj, new_traj)
@@ -446,7 +449,13 @@ function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="IPOPT", 
 		if SCPS.convergence_measure[end] <= param.convergence_threshold
 			SCPS.converged = true
 			convex_ineq_satisfied_vec[end] && (SCPS.successful = true)
-			force ? continue : break
+
+			if !convex_ineq_satisfied_vec[end]
+				warn("[scp_gusto.jl::solve_gusto_jump!] Returning solution which doesn't satisfy constraints.")
+			end
+			force ? 
+				continue : 
+				break
 		end
 	end
 end

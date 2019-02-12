@@ -44,7 +44,8 @@ function Freeflyer{T}() where T
 
   hard_limit_omega = 20*pi/180
   wheel_torque_limit = 0.593        # 84 oz-in (https://www.pololu.com/product/2822/specs)
-  hard_limit_alpha = J_w_inv*wheel_torque_limit
+  warn("[freeflyer.jl::Freeflyer] Reducing hard_limit_alpha.")
+  hard_limit_alpha = 0.33*J_w_inv*wheel_torque_limit
 
   xb = [0.; 0.15; 0.]
   Jcollision = []

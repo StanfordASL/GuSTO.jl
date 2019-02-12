@@ -163,8 +163,8 @@ end
 
 # Get current dynamics structures for a time step
 get_f(k::Int, model::FreeflyerSE2) = model.f[k]
-get_A(k::Int, model::FreeflyerSE2) = model.A
-get_B(k::Int, model::FreeflyerSE2) = model.B
+get_A(k::Int, model::FreeflyerSE2) = model.A[k]
+get_B(k::Int, model::FreeflyerSE2) = model.B[k]
 
 # Generate full dynamics structures for a time step
 function f_dyn(x::Vector, u::Vector, robot::Robot, model::FreeflyerSE2)
@@ -176,6 +176,7 @@ end
 
 function update_f!(f, x::Vector, u::Vector, robot::Robot, model::FreeflyerSE2)
   F, M = u[1:2], u[3]
+  f[1:3] = x[4:6]
   f[4:5] = 1/robot.mass_ff*F
   f[6] = robot.J_ff_inv*M
 end
