@@ -34,7 +34,8 @@ function solve_SCPshooting!(TOS::TrajectoryOptimizationSolution, TOP::Trajectory
 	TOS.traj, TOS.SCPS, TOS.SS = SCPS.traj, SCPS, SS
 end
 
-function solve_SCP!(TOS::TrajectoryOptimizationSolution, TOP::TrajectoryOptimizationProblem, solve_method!, init_method, solver="Mosek"; kwarg...)
+function solve_SCP!(TOS::TrajectoryOptimizationSolution, TOP::TrajectoryOptimizationProblem, 
+					solve_method!, init_method, solver="Mosek"; kwarg...)
 	robot = TOP.PD.robot
 	model = TOP.PD.model
 
@@ -53,7 +54,8 @@ function solve_SCP!(TOS::TrajectoryOptimizationSolution, TOP::TrajectoryOptimiza
 	solve_method!(SCPS, SCPP, solver; kwarg...)
 end
 
-function solve_SCP!(TOS::TrajectoryOptimizationSolution, TOP::TrajectoryOptimizationProblem, solve_method!, traj_init::Trajectory, solver="Mosek"; kwarg...)
+function solve_SCP!(TOS::TrajectoryOptimizationSolution, TOP::TrajectoryOptimizationProblem, 
+					solve_method!, traj_init::Trajectory, solver="Mosek"; kwarg...)
 	robot = TOP.PD.robot
 	model = TOP.PD.model
 

@@ -232,11 +232,19 @@ function trust_region_satisfied_gusto(traj::Trajectory, traj_prev::Trajectory, S
   return max_val-Delta <= 0
 end
 
+function nonconvex_ineq_satisfied_gusto(traj::Trajectory, traj_prev::Trajectory, SCPC::SCPConstraints, SCPP::SCPProblem)
+  # checks for satisfaction of convex state inequalities and nonconvex->convexified state inequalities
+	for (f, k, i) in (SCPC.nonconvex_state_ineq...)
+		if f(traj, traj_prev, SCPP, k, i) > SCPP.param.alg.epsilon
+			return false
+		end
+	end
+  return true
+end
 function convex_ineq_satisfied_gusto(traj::Trajectory, traj_prev::Trajectory, SCPC::SCPConstraints, SCPP::SCPProblem)
   # checks for satisfaction of convex state inequalities and nonconvex->convexified state inequalities
 	for (f, k, i) in (SCPC.convex_state_ineq..., SCPC.nonconvex_state_convexified_ineq...)
 		if f(traj, traj_prev, SCPP, k, i) > SCPP.param.alg.epsilon
-			# @show f(traj, traj_prev, SCPP, k, i)
 			return false
 		end
 	end

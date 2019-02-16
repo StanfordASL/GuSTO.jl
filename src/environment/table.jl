@@ -36,15 +36,33 @@ function Table{T}(worldAABBmin::AbstractArray{T}, worldAABBmax::AbstractArray{T}
   keepout_zones = Vector{GeometryTypes.GeometryPrimitive}(0)
   koz_min = []
   koz_max = []
-  a = 10.  # keep-out zone size (should be larger than 1.05)
-  push!(koz_min, [worldAABBmax[1],   -a, -a])  # x
-  push!(koz_max, [worldAABBmax[1]+a,  a,  a])
-  push!(koz_min, [worldAABBmin[1]-a, -a, -a])  # -x
-  push!(koz_max, [worldAABBmin[1],    a,  a])
-  push!(koz_min, [-a, worldAABBmax[2],   -a])  # y
-  push!(koz_max, [ a, worldAABBmax[2]+a,  a])
-  push!(koz_min, [-a, worldAABBmin[2]-a, -a])  # -y
-  push!(koz_max, [ a, worldAABBmin[2],    a])
+
+  B_original = false
+  if B_original
+    # ------------------
+    # Original obstacles
+    a = 10.  # keep-out zone size (should be larger than 1.05)
+    push!(koz_min, [worldAABBmax[1],   -a, -a])  # x
+    push!(koz_max, [worldAABBmax[1]+a,  a,  a])
+    push!(koz_min, [worldAABBmin[1]-a, -a, -a])  # -x
+    push!(koz_max, [worldAABBmin[1],    a,  a])
+    push!(koz_min, [-a, worldAABBmax[2],   -a])  # y
+    push!(koz_max, [ a, worldAABBmax[2]+a,  a])
+    push!(koz_min, [-a, worldAABBmin[2]-a, -a])  # -y
+    push!(koz_max, [ a, worldAABBmin[2],    a])
+    # ------------------
+
+  else
+    # --------------------------
+    # Canyon (passage in middle)
+    middle = worldAABBmin + 0.5*(worldAABBmax-worldAABBmin)
+    a,b,c = 0.25, 0.25, 0.01
+    push!(koz_min, [middle[1]-a,  middle[2]+b,     -c])
+    push!(koz_max, [middle[1]+a,  worldAABBmax[2],  c])
+    push!(koz_min, [middle[1]-a,  worldAABBmin[2], -c])
+    push!(koz_max, [middle[1]+a,  middle[2]-b,      c])
+    # --------------------------
+  end
 
   for i in 1:length(koz_min)
     push!(keepout_zones, HyperRectangle(koz_min[i]..., (koz_max[i]-koz_min[i])...))
