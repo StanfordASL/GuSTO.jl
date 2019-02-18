@@ -57,7 +57,7 @@ function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Ipopt", 
 	N = SCPP.N
 	param, model = SCPP.param, SCPP.PD.model
 
-	param.alg = SCPParam_GuSTO(model)
+	!isdefined(param, :alg) ? param.alg = SCPParam_GuSTO(model) : nothing
 	Δ0, ω0, ω_max, ρ0, ρ1 = param.alg.Δ0, param.alg.ω0, param.alg.ω_max, param.alg.ρ0, param.alg.ρ1
 	β_succ, β_fail, γ_fail = param.alg.β_succ, param.alg.β_fail, param.alg.γ_fail
 	Δ_vec, ω_vec, ρ_vec = param.alg.Δ_vec, param.alg.ω_vec, param.alg.ρ_vec
@@ -78,15 +78,8 @@ function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Ipopt", 
 	while (SCPS.iterations < iter_cap)
 		time_start = time_ns()
 
-		# @show SCPS.scp_status[end]
-
 		# TODO: Avoid reconstructing the problem from scratch
 		if solver == "Mosek"
-			# SCPS.solver_model = Model(with_optimizer(MosekOptimizer; kwarg...))
-			# SCPS.solver_model = Model(with_optimizer(SCS.Optimizer; kwarg...))
-			# SCPS.solver_model = Model(with_optimizer(Clp.Optimizer; kwarg...))
-			# SCPS.solver_model = Model(with_optimizer(CSDP.Optimizer; kwarg...))
-			# SCPS.solver_model = Model(with_optimizer(ECOS.Optimizer; kwarg...))
 			SCPS.solver_model = Model(with_optimizer(SCIP.Optimizer; kwarg...))
 		elseif solver == "Gurobi"
 			SCPS.solver_model = Model(with_optimizer(Gurobi.Optimizer; kwarg...))
@@ -109,8 +102,8 @@ function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Ipopt", 
 		JuMP.optimize!(SCPS.solver_model)
 
 		push!(SCPS.solver_status, JuMP.termination_status(SCPS.solver_model))
-		if SCPS.solver_status[end] ∉ (MOI.OPTIMAL, MOI.LOCALLY_SOLVED)
-		  warn("GuSTO SCP iteration failed to find an optimal solution")
+		if SCPS.solver_status[end] ∉ (MOI.OPTIMAL, MOI.LOCALLY_SOLVED, MOI.ALMOST_LOCALLY_SOLVED)
+		  # warn("GuSTO SCP iteration failed to find an optimal solution")
 		  push!(SCPS.iter_elapsed_times, (time_ns() - time_start)/10^9) 
 		  return
 		end
@@ -123,7 +116,7 @@ function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Ipopt", 
 		
 		# Check trust regions
 		push!(trust_region_satisfied_vec, trust_region_satisfied_gusto(new_traj, SCPS.traj, SCPP))
-		push!(convex_ineq_satisfied_vec, convex_ineq_satisfied_gusto_jump(new_traj, SCPS.traj, SCPC, SCPP))
+		push!(convex_ineq_satisfied_vec, convex_ineq_satisfied_gusto_jump(new_traj, new_traj, SCPC, SCPP))
 
 		if trust_region_satisfied_vec[end]
 			push!(ρ_vec, trust_region_ratio_gusto(new_traj, SCPS.traj, SCPP))			
@@ -140,7 +133,8 @@ function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Ipopt", 
 					push!(ω_vec, γ_fail*ω_vec[end])
 				else
 					push!(SCPS.scp_status, :OK)
-					push!(ω_vec, ω0)
+					# push!(ω_vec, ω0)
+					push!(ω_vec, ω_vec[end])
 				end
 			end
 		else
@@ -170,7 +164,7 @@ function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Ipopt", 
 		end
 		!SCPS.accept_solution[end] ? continue : nothing
 
-		conv_iter_spread = 3
+		conv_iter_spread = 2
 		if SCPS.iterations > conv_iter_spread && sum(SCPS.convergence_measure[end-conv_iter_spread+1:end]) <= param.convergence_threshold
 			SCPS.converged = true
 			convex_ineq_satisfied_vec[end] && (SCPS.successful = true)
@@ -198,27 +192,43 @@ function add_constraints_gusto_jump!(SCPS::SCPSolution, SCPV::SCPVariables, SCPC
 
 	update_model_params!(SCPP, traj_prev)
 
-	for cc in values(merge(SCPC.convex_state_eq, SCPC.dynamics))
-		if cc.dimtype == :scalar
-			cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)], cc.func(SCPV, traj_prev, SCPP, k, i...) == 0)
-		elseif cc.dimtype == :array
-			cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)], cc.func(SCPV, traj_prev, SCPP, k, i...) .== 0)
+	for cc_list in values(merge(SCPC.convex_state_eq, SCPC.dynamics))
+		for cc in cc_list
+			if cc.dimtype == :scalar
+				cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)], cc.func(SCPV, traj_prev, SCPP, k, i...) == 0)
+			elseif cc.dimtype == :array
+				cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)], cc.func(SCPV, traj_prev, SCPP, k, i...) .== 0)
+			end
 		end
 	end
 	
-  for cc in values(SCPC.convex_control_ineq)
-		if cc.dimtype == :scalar
-			cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)], cc.func(SCPV, traj_prev, SCPP, k, i...) <= 0)
-		elseif cc.dimtype == :array
-			cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)], cc.func(SCPV, traj_prev, SCPP, k, i...) .<= 0)
+  for cc_list in values(SCPC.convex_control_ineq)
+  	for cc in cc_list
+			if cc.dimtype == :scalar
+				cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)], cc.func(SCPV, traj_prev, SCPP, k, i...) <= 0)
+			elseif cc.dimtype == :array
+				cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)], cc.func(SCPV, traj_prev, SCPP, k, i...) .<= 0)
+			end
 		end
 	end
 
-	for cc in values(merge(SCPC.convex_state_boundary_condition_eq, SCPC.nonconvex_state_boundary_condition_convexified_eq))
-		if cc.dimtype == :scalar
-			cc.con_reference = @constraint(solver_model, [k=cc.params.k_timestep,i=Iterators.product(cc.ind_other...)], cc.func(SCPV, traj_prev, SCPP, cc.params, i...) == 0)
-		elseif cc.dimtype == :array
-			cc.con_reference = @constraint(solver_model, [k=cc.params.k_timestep,i=Iterators.product(cc.ind_other...)], cc.func(SCPV, traj_prev, SCPP, cc.params, i...) .== 0)
+	for cc_list in values(merge(SCPC.convex_state_boundary_condition_eq, SCPC.nonconvex_state_boundary_condition_convexified_eq))
+		for cc in cc_list
+			if cc.dimtype == :scalar
+				cc.con_reference = @constraint(solver_model, [k=cc.params.k_timestep,i=Iterators.product(cc.ind_other...)], cc.func(SCPV, traj_prev, SCPP, cc.params, i...) == 0)
+			elseif cc.dimtype == :array
+				cc.con_reference = @constraint(solver_model, [k=cc.params.k_timestep,i=Iterators.product(cc.ind_other...)], cc.func(SCPV, traj_prev, SCPP, cc.params, i...) .== 0)
+			end
+		end
+	end
+
+	for cc_list in values(merge(SCPC.convex_state_boundary_condition_ineq, SCPC.nonconvex_state_boundary_condition_convexified_ineq))
+		for cc in cc_list
+			if cc.dimtype == :scalar
+				cc.con_reference = @constraint(solver_model, [k=cc.params.k_timestep,i=Iterators.product(cc.ind_other...)], cc.func(SCPV, traj_prev, SCPP, cc.params, i...) <= 0)
+			elseif cc.dimtype == :array
+				cc.con_reference = @constraint(solver_model, [k=cc.params.k_timestep,i=Iterators.product(cc.ind_other...)], cc.func(SCPV, traj_prev, SCPP, cc.params, i...) .<= 0)
+			end
 		end
 	end
 
@@ -240,31 +250,35 @@ function add_objective_gusto_jump!(SCPS::SCPSolution, SCPV::SCPVariables, SCPC::
 	cost_expr = cost_true_convexified(SCPV, traj_prev, SCPP)
 
 	# Add penalized constraints:
-	for cc in values(SCPC.state_trust_region_ineq)
-		if cc.dimtype == :scalar
-			cc.var_reference = @variable(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)])
-			cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)],
-				ω*cc.func(SCPV, traj_prev, SCPP, k, i...) - Δ <= cc.var_reference[k,i])
-			@constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)],
-				-cc.var_reference[k,i] <= 0.)
-			cost_expr += sum(cc.var_reference[k,i] for k in cc.ind_time, i in Iterators.product(cc.ind_other...))
-			set_start_value.(cc.var_reference, 0.)
-		elseif cc.dimtype == :array
-			throw("Not implemented")
+	for cc_list in values(SCPC.state_trust_region_ineq)
+		for cc in cc_list
+			if cc.dimtype == :scalar
+				cc.var_reference = @variable(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)])
+				cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)],
+					ω*cc.func(SCPV, traj_prev, SCPP, k, i...) - Δ <= cc.var_reference[k,i])
+				@constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)],
+					-cc.var_reference[k,i] <= 0.)
+				cost_expr += sum(cc.var_reference[k,i] for k in cc.ind_time, i in Iterators.product(cc.ind_other...))
+				set_start_value.(cc.var_reference, 0.)
+			elseif cc.dimtype == :array
+				throw("Not implemented")
+			end
 		end
 	end
 
-	for cc in values(merge(SCPC.convex_state_ineq, SCPC.nonconvex_state_convexified_ineq))
-		if cc.dimtype == :scalar
-			cc.var_reference = @variable(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)])
-			cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)],
-				ω*cc.func(SCPV, traj_prev, SCPP, k, i...) <= cc.var_reference[k,i])
-			@constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)],
-				-cc.var_reference[k,i] <= 0.)
-			cost_expr += sum(cc.var_reference[k,i] for k in cc.ind_time, i in Iterators.product(cc.ind_other...))
-			set_start_value.(cc.var_reference, 0.)
-		elseif cc.dimtype == :array
-			throw("Not implemented")
+	for cc_list in values(merge(SCPC.convex_state_ineq, SCPC.nonconvex_state_convexified_ineq))
+		for cc in cc_list
+			if cc.dimtype == :scalar
+				cc.var_reference = @variable(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)])
+				cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)],
+					ω*cc.func(SCPV, traj_prev, SCPP, k, i...) <= cc.var_reference[k,i])
+				@constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)],
+					-cc.var_reference[k,i] <= 0.)
+				cost_expr += sum(cc.var_reference[k,i] for k in cc.ind_time, i in Iterators.product(cc.ind_other...))
+				set_start_value.(cc.var_reference, 0.)
+			elseif cc.dimtype == :array
+				throw("Not implemented")
+			end
 		end
 	end
 
@@ -274,14 +288,14 @@ end
 function convex_ineq_satisfied_gusto_jump(traj::Trajectory, traj_prev::Trajectory, SCPC::SCPConstraints, SCPP::SCPProblem)
   # checks for satisfaction of convex state inequalities and nonconvex->convexified state inequalities]
 
-  for cc in values(merge(SCPC.convex_state_ineq, SCPC.nonconvex_state_convexified_ineq))
-  	for k in cc.ind_time, i in Iterators.product(cc.ind_other...)
-  		if cc.func(traj, traj_prev, SCPP, k, i...) > SCPP.param.alg.ε
-  			@show (cc.func, k, i)
-  			@show cc.func(traj, traj_prev, SCPP, k, i...)
-				return false
-			end
-  	end
+  for cc_list in values(merge(SCPC.convex_state_ineq, SCPC.nonconvex_state_convexified_ineq))
+  	for cc in cc_list
+	  	for k in cc.ind_time, i in Iterators.product(cc.ind_other...)
+	  		if cc.func(traj, traj_prev, SCPP, k, i...) > SCPP.param.alg.ε
+					return false
+				end
+	  	end
+	  end
   end
   return true
 

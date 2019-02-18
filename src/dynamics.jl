@@ -30,8 +30,15 @@ end
 function csbce_goal_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem, goal::G) where G <: Goal{PointGoal}
 	X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,goal_set,x_dim,u_dim,N,dh = @constraint_shortcut(traj, traj_prev, SCPP)
 	ind, point = goal.ind_coordinates, goal.params.point
-	# @show ind, point, X[ind,N] - point
-	X[ind,N] - point
+	X[ind,N] - point;
+	
+end
+
+function csbci_goal_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem, goal::G) where G <: Goal{BoxGoal}
+	X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,goal_set,x_dim,u_dim,N,dh = @constraint_shortcut(traj, traj_prev, SCPP)
+	ind, upper_bound, lower_bound = goal.ind_coordinates, goal.params.upper_bound, goal.params.lower_bound
+	[X[ind,N] - upper_bound
+	 lower_bound - X[ind,N]]
 end
 
 ## Convex state boundary condition inequality constraints

@@ -9,7 +9,17 @@ function solve!(SS::ShootingSolution, SP::ShootingProblem)
 
 	# Run Newton method
 	time_start = time_ns()
-	sol_newton = nlsolve(shooting_eval!, SP.p0, iterations = 7) # TODO(ambyld): Make number of iterations a parameter
+	sol_newton = nothing
+	try
+		sol_newton = nlsolve(shooting_eval!, SP.p0, iterations = 100, ftol=1e-3) # TODO(ambyld): Make number of iterations a parameter
+	catch
+		iter_elapsed_time = (time_ns() - time_start)/10^9
+		push!(SS.prob_status, :Diverged)
+		push!(SS.J_true, NaN)
+		push!(SS.convergence_measure, NaN)
+		push!(SS.iter_elapsed_times, iter_elapsed_time)
+		return
+	end
 	iter_elapsed_time = (time_ns() - time_start)/10^9
 
 	if sol_newton.f_converged
@@ -38,19 +48,18 @@ function solve!(SS::ShootingSolution, SP::ShootingProblem)
 	end
 end
 
-function parameterized_shooting_eval!(F, p0, SP::ShootingProblem)
-	model, x_init, x_goal, tf = SP.PD.model, SP.PD.x_init, SP.x_goal, SP.tf
+function parameterized_shooting_eval!(F::Vector{T}, p0::Vector{T}, SP::ShootingProblem) where T <: AbstractFloat
+	model, x_init, x_goal, tf, dt = SP.PD.model, SP.PD.x_init, SP.x_goal, SP.tf, SP.dt
 	x_dim = model.x_dim
 
 	x0 = [x_init; p0]
-	N = SP.N
+	# N = SP.N
 	tspan = (0., tf)
-	dt = tf/(N-1)
+	# dt = tf/(500-1)
 	prob = ODEProblem(shooting_ode!, x0, tspan, SP)
-	time_start = time_ns()
 	sol = DifferentialEquations.solve(prob, dtmin=dt, force_dtmin=true, saveat=dt)
 
-	# @show "success"
+	a = [1.0*ones(6); 10.0*ones(7)]
 	for i = 1:x_dim
 		F[i] = x_goal[i] - sol.u[end][i]
 	end

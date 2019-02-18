@@ -1,7 +1,7 @@
 
 export solve_SCPshooting!, solve_SCP!
 
-function solve_SCPshooting!(TOS::TrajectoryOptimizationSolution, TOP::TrajectoryOptimizationProblem, solve_method!, init_method, solver="Mosek"; kwarg...)
+function solve_SCPshooting!(TOS::TrajectoryOptimizationSolution, TOP::TrajectoryOptimizationProblem, solve_method!, init_method, solver="Mosek"; max_iter=30, kwarg...)
 	robot = TOP.PD.robot
 	model = TOP.PD.model
 
@@ -22,13 +22,13 @@ function solve_SCPshooting!(TOS::TrajectoryOptimizationSolution, TOP::Trajectory
 
 	# Until shooting method succeeds or maximum SCP iterations is reached
 	ss_sol = nothing
-	while (!SCPS.converged)
+	while (!SCPS.converged && SCPS.iterations < max_iter)
 		# Attempt shooting method
 		SP = ShootingProblem(TOP, SCPS)
 		ss_sol = solve!(SS, SP)
 		
 		# If successful shooting runs have converged, exit
-		conv_iter_spread = 3
+		conv_iter_spread = 2
 		if SCPS.iterations > conv_iter_spread && sum(SS.convergence_measure[end-conv_iter_spread+1:end]) <= SCPS.param.convergence_threshold
 			SS.converged = true
 			# TODO: Check inequality constraints
@@ -44,7 +44,7 @@ function solve_SCPshooting!(TOS::TrajectoryOptimizationSolution, TOP::Trajectory
 	TOS.total_time = SCPS.total_time + sum(SS.iter_elapsed_times)
 end
 
-function solve_SCP!(TOS::TrajectoryOptimizationSolution, TOP::TrajectoryOptimizationProblem, solve_method!, init_method, solver="Mosek"; max_iter=50, force=false, kwarg...)
+function solve_SCP!(TOS::TrajectoryOptimizationSolution, TOP::TrajectoryOptimizationProblem, solve_method!, init_method, solver="Mosek"; max_iter=30, force=false, kwarg...)
 	robot = TOP.PD.robot
 	model = TOP.PD.model
 
@@ -59,7 +59,7 @@ function solve_SCP!(TOS::TrajectoryOptimizationSolution, TOP::TrajectoryOptimiza
 	solve_method!(SCPS, SCPP, solver, max_iter, force; kwarg...)
 end
 
-function solve_SCP!(TOS::TrajectoryOptimizationSolution, TOP::TrajectoryOptimizationProblem, solve_method!, traj_init::Trajectory, solver="Mosek"; max_iter=50, force=false, kwarg...)
+function solve_SCP!(TOS::TrajectoryOptimizationSolution, TOP::TrajectoryOptimizationProblem, solve_method!, traj_init::Trajectory, solver="Mosek"; max_iter=30, force=false, kwarg...)
 	robot = TOP.PD.robot
 	model = TOP.PD.model
 

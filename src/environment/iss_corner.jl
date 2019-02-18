@@ -10,7 +10,7 @@ end
 
 function ISSCorner{T}() where T
   keepin_zones = Vector{HyperRectangle}()
-  vars = matread(joinpath(Pkg.dir("GuSTO"), "src", "environment","iss_corner.mat"))
+  vars = matread(joinpath(abspath(joinpath(dirname(Base.find_package("GuSTO")), "..")), "src", "environment","iss_corner.mat"))
   for zone in vars["keepin_zones"]
     push!(keepin_zones,
       HyperRectangle(Vec3f0(zone["corner1"][:]),Vec3f0(zone["corner2"][:]-zone["corner1"][:])))

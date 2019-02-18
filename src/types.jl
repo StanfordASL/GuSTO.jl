@@ -23,13 +23,19 @@ function Workspace(rb::Robot, env::Environment)
   Workspace(btenv_keepin, btenv_keepout)
 end
 
+abstract type GoalType end
+mutable struct GoalSet
+	goals::SortedMultiDict
+end
+GoalSet() = GoalSet(SortedMultiDict())
+
 mutable struct ProblemDefinition{R<:Robot, D<:DynamicsModel, E<:Environment}
 	robot::R
 	model::D
 	env::E
 
 	x_init
-	goal_set::GoalSet
+	goal_set
 end
 
 mutable struct Trajectory
@@ -138,7 +144,7 @@ mutable struct SCPConstraints
 	# TODO(acauligi): only convex_state_bc_ineq, nonconvex_state_bc_ineq, nonconvex_state_bc_convexified_ineq
 	#   are correctly implemented across algorithms
 end
-SCPConstraints() = SCPConstraints((Dict{Symbol, ConstraintCategory}() for i in 1:17)...)
+SCPConstraints() = SCPConstraints((Dict{Symbol, Vector}() for i in 1:17)...)
 
 mutable struct SCPSolution
 	traj::Trajectory
@@ -184,6 +190,7 @@ mutable struct ShootingProblem{R,D,E} <: OptAlgorithmProblem{R,D,E}
 	p0 	# Initial dual
 	N 	# Discretization steps
 	tf  # Final time
+	dt
 	x_goal
 end
 
@@ -209,9 +216,12 @@ mutable struct TrajectoryOptimizationSolution
 end
 
 function ShootingProblem(TOP::TrajectoryOptimizationProblem, SCPS::SCPSolution)
-	goal_set, tf_guess = TOP.PD.goal_set, TOP.tf_guess
-	x_goal = get_first_goal_at_time(goal_set, tf_guess).params.point
-	ShootingProblem(TOP.PD, TOP.WS, SCPS.dual, TOP.N, SCPS.traj.Tf, x_goal)
+	goal_set, tf_guess, x_dim = TOP.PD.goal_set, TOP.tf_guess, TOP.PD.model.x_dim
+	x_goal = zeros(x_dim)
+  for goal in values(inclusive(goal_set.goals, searchsortedfirst(goal_set.goals, tf_guess), searchsortedlast(goal_set.goals, tf_guess)))
+    x_goal[goal.ind_coordinates] = center(goal.params)
+  end
+	ShootingProblem(TOP.PD, TOP.WS, SCPS.dual, TOP.N, SCPS.traj.Tf, SCPS.traj.Tf/(N-1), x_goal)
 end
 
 TrajectoryOptimizationProblem(PD, N, tf_guess; fixed_final_time::Bool=false) = TrajectoryOptimizationProblem(PD, fixed_final_time, N, tf_guess, 1/(N-1))

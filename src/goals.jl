@@ -1,10 +1,3 @@
-abstract type GoalType end
-
-mutable struct GoalSet
-	goals::SortedMultiDict
-end
-GoalSet() = GoalSet(SortedMultiDict())
-
 mutable struct Goal{T<:GoalType}
 	params::T
 
@@ -12,6 +5,14 @@ mutable struct Goal{T<:GoalType}
 	ind_coordinates # Coordinate indices on which goal is defined
 	k_timestep 			# Assigned timestep number
 	t_final  				# Final calculated goal time
+end
+
+function Goal(params, t_guess, ind_coordinates)
+	Goal(params, t_guess, ind_coordinates, missing, missing)
+end
+
+function Goal(params, t_guess, model::M) where M <: DynamicsModel
+	Goal(params, t_guess, 1:model.x_dim, missing, missing)
 end
 
 function assign_timesteps!(goal_set::GoalSet, N, tf_guess)
@@ -22,10 +23,6 @@ end
 
 function get_first_goal_at_time(goal_set::GoalSet, t)
 	deref_value((goal_set.goals, searchsortedfirst(goal_set.goals, t)))
-end
-
-function Goal(params, t_guess, model)
-	Goal(params, t_guess, 1:model.x_dim, missing, missing)
 end
 
 function add_goal!(goal_set::GoalSet, goal::Goal{T}) where T
@@ -45,3 +42,7 @@ mutable struct BallGoal <: GoalType
 	center
 	radius
 end
+
+center(goal::PointGoal) = goal.point
+center(goal::BoxGoal) = 1/2*(goal.upper_bound + goal.lower_bound)
+center(goal::BallGoal) = goal.center

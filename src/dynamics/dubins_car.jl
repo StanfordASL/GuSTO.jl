@@ -33,7 +33,7 @@ function DubinsCar()
 end
 
 function SCPParam(model::DubinsCar, fixed_final_time::Bool)
-  convergence_threshold = 1e-8
+  convergence_threshold = 1e-4
   SCPParam(fixed_final_time, convergence_threshold)
 end
 
@@ -193,8 +193,13 @@ function SCPConstraints(SCPP::SCPProblem{Car, DubinsCar, E}) where E
 	## Convex state equality constraints
 	# Init and goal
 	add_constraint_category!(SCPC.convex_state_eq, cse_init_constraints, :scalar, 0, 1:x_dim)
-	# add_constraint_category!(SCPC.convex_state_eq, cse_goal_constraints, :scalar, 0, 1:x_dim)
-	add_constraint_category!(SCPC.convex_state_boundary_condition_eq, csbce_goal_constraints, get_first_goal_at_time(goal_set, tf_guess), :array)
+	for goal in values(inclusive(goal_set.goals, searchsortedfirst(goal_set.goals, tf_guess), searchsortedlast(goal_set.goals, tf_guess)))
+		if typeof(goal.params) == PointGoal
+			add_constraint_category!(SCPC.convex_state_boundary_condition_eq, csbce_goal_constraints, goal, :array)
+		else
+			add_constraint_category!(SCPC.convex_state_boundary_condition_ineq, csbci_goal_constraints, goal, :array)
+		end
+	end
 
 	## Convex state inequality constraints
 	# State bounds
@@ -247,7 +252,8 @@ function get_dual_cvx(prob::Convex.Problem, SCPP::SCPProblem{Car, DubinsCar, E},
 end
 
 function get_dual_jump(SCPC::SCPConstraints, SCPP::SCPProblem{Car, DubinsCar, E}) where E
-	-JuMP.dual.([SCPC.convex_state_eq[:cse_init_constraints].con_reference[0,(i,)] for i = SCPC.convex_state_eq[:cse_init_constraints].ind_other[1]])
+	init_constraint_category = SCPC.convex_state_eq[:cse_init_constraints][1]
+  -JuMP.dual.([init_constraint_category.con_reference[0,(i,)] for i = init_constraint_category.ind_other[1]])
 end
 
 function shooting_ode!(xdot, x, SP::ShootingProblem{Car, DubinsCar, E}, t) where E

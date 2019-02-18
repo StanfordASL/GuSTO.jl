@@ -31,7 +31,7 @@ function SCPParam_GuSTO(model::AstrobeeSE3)
   ω_max = 1.0e10
   ε = 1.0e-6
   ρ0 = 0.01
-  ρ1 = 0.1
+  ρ1 = 0.05
   β_succ = 2.
   β_fail = 0.5
   γ_fail = 5.

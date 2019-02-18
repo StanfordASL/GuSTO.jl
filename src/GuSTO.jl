@@ -17,7 +17,6 @@ import GeometryTypes: HyperRectangle, HyperSphere, HomogenousMesh
 import ColorTypes: RGB, RGBA
 
 using StaticArrays
-using StaticArrays.FixedSizeArrays
 using JuMP, Convex
 using Ipopt, Mosek, SCS
 using MathOptInterfaceMosek
@@ -32,8 +31,9 @@ using LinearAlgebra
 
 const MOI = MathOptInterface
 
-include("goals.jl")
+
 include("types.jl")
+include("goals.jl")
 
 include("traj_opt.jl")
 include("scp.jl")
