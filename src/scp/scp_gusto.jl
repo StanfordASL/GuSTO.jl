@@ -30,6 +30,7 @@ end
 ######
 
 function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", max_iter=50, force=false; kwarg...)
+	# pygui(true)
 	# Solves a sequential convex programming problem
 	# Inputs:
 	#		SCPS - SCP solution structure, including an initial trajectory
@@ -85,6 +86,13 @@ function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", m
 
 		# Recover solution
 		new_traj = Trajectory(SCPV.X.value, SCPV.U.value, SCPV.Tf.value[1])
+
+		# figure(1)
+		# PyPlot.plot(new_traj.X[1,:], new_traj.X[2,:])
+		# figure(2)
+		# PyPlot.plot(1:length(new_traj.U[1,:]), new_traj.U[1,:])
+		# sleep(1e-3)
+
 		push!(SCPS.convergence_measure, convergence_metric(new_traj, SCPS.traj, SCPP))
 		push!(SCPS.J_full, prob.optval)
 		SCPS.dual = get_dual_cvx(prob, SCPP, solver)
@@ -134,9 +142,10 @@ function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", m
 		end
 		!SCPS.accept_solution[end] ? continue : nothing
 
-		if SCPS.convergence_measure[end] <= param.convergence_threshold
+		if SCPS.convergence_measure[end] <= param.convergence_threshold ||
+		   (SCPS.iterations > 4 && convex_ineq_satisfied_vec[end] == true)
 			SCPS.converged = true
-			convex_ineq_satisfied_vec[end] && (SCPS.successful = true)
+			convex_ineq_satisfied_vec[end] && (SCPS.successful == true)
 			force ? continue : break
 		end
 	end

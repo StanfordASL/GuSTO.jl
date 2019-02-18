@@ -40,7 +40,7 @@ function Table{T}(worldAABBmin::AbstractArray{T}, worldAABBmax::AbstractArray{T}
   B_original = false
   if B_original
     # ------------------
-    # Original obstacles
+    # Keepin - stay in workspace -> constraints to not come out of it
     a = 10.  # keep-out zone size (should be larger than 1.05)
     push!(koz_min, [worldAABBmax[1],   -a, -a])  # x
     push!(koz_max, [worldAABBmax[1]+a,  a,  a])
@@ -53,6 +53,19 @@ function Table{T}(worldAABBmin::AbstractArray{T}, worldAABBmax::AbstractArray{T}
     # ------------------
 
   else
+    # ------------------
+    # Keepin - stay in workspace -> constraints to not come out of it
+    a = 10.  # keep-out zone size (should be larger than 1.05)
+    push!(koz_min, [worldAABBmax[1],   -a, -a])  # x
+    push!(koz_max, [worldAABBmax[1]+a,  a,  a])
+    push!(koz_min, [worldAABBmin[1]-a, -a, -a])  # -x
+    push!(koz_max, [worldAABBmin[1],    a,  a])
+    push!(koz_min, [-a, worldAABBmax[2],   -a])  # y
+    push!(koz_max, [ a, worldAABBmax[2]+a,  a])
+    push!(koz_min, [-a, worldAABBmin[2]-a, -a])  # -y
+    push!(koz_max, [ a, worldAABBmin[2],    a])
+
+
     # --------------------------
     # Canyon (passage in middle)
     middle = worldAABBmin + 0.5*(worldAABBmax-worldAABBmin)
@@ -61,6 +74,7 @@ function Table{T}(worldAABBmin::AbstractArray{T}, worldAABBmax::AbstractArray{T}
     push!(koz_max, [middle[1]+a,  worldAABBmax[2],  c])
     push!(koz_min, [middle[1]-a,  worldAABBmin[2], -c])
     push!(koz_max, [middle[1]+a,  middle[2]-b,      c])
+
     # --------------------------
   end
 
