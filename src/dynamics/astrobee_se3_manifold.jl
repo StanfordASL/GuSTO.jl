@@ -3,7 +3,7 @@ export init_traj_straightline, init_traj_geometricplan
 
 mutable struct AstrobeeSE3Manifold <: DynamicsModel
   x_dim   # state: r v p ω
-  u_dim   # control a α
+  u_dim   # control F M
   clearance
 
   x_min
@@ -72,9 +72,7 @@ end
 
 function cost_true(traj, traj_prev::Trajectory, OAP::A) where A <: OptAlgorithmProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E} where {T,E}
   u_dim = OAP.PD.model.u_dim
-  dtp = traj_prev.dt
-
-  U, N = traj.U, OAP.N
+  U, N, dtp = traj.U, OAP.N, traj_prev.dt
   Jm = 0
 
   # # Forward Euler
@@ -606,66 +604,87 @@ end
 function trust_region_ratio_gusto(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}) where {T,E}
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,goal_set,x_dim,u_dim,N,dh = @scp_shortcut_AstrobeeSE3Manifold(traj, traj_prev, SCPP)
   fp, Ap = model.f, model.A
+  num,den = 0, 0 
+  env_ = WS.btenvironment_keepout
 
-  obstacle_set = SCPP.PD.env.obstacle_set
-  
-  num_dyn, den_dyn = 0., 0.
   for k in 1:N-1
     linearized = fp[k] + Ap[k]*(X[:,k]-Xp[:,k])
-    num_dyn += norm(f_dyn(X[:,k],U[:,k],robot,model) - linearized)
-    den_dyn += norm(linearized)
+    num += norm(f_dyn(X[:,k],U[:,k],robot,model) - linearized)
+    den += norm(linearized)
   end
-
-  num_other, den_other = 0.,0.
+  
+  clearance = model.clearance 
 
   for k in 1:N
-    r = get_workspace_location(traj, SCPP, k)
-    r_prev = get_workspace_location(traj_prev, SCPP, k)
-    for obs in obstacle_set
-      r_obs = origin(obs)
-      radius_obs = radius(obs)
-      ε = 1e-1  # Smooth gap from sphere edge
-      σ = 1.
-      # α = (SCPP.param.alg.ε)/(1/(2*π*σ^2)^(3/2)*exp(-radius_obs^2/(2*σ^2)))
-      α = 1e3
+    r0 = get_workspace_location(traj, SCPP, k)
+    r = get_workspace_location(traj_prev, SCPP, k)
+    for (rb_idx,body_point) in enumerate(env_.convex_robot_components)
+      for (env_idx,convex_env_component) in enumerate(env_.convex_env_components)
+        dist,xbody,xobs = BulletCollision.distance(env_,rb_idx,r0,env_idx)
+        nhat = dist > 0 ?
+          (xbody-xobs)./norm(xbody-xobs) :
+          (xobs-xbody)./norm(xobs-xbody) 
+        linearized = clearance - (dist + nhat'*(r-r0))
+        
+        dist,xbody,xobs = BulletCollision.distance(env_,rb_idx,r,env_idx)
 
-      if norm(r_prev - r_obs) >= radius_obs + ε
-        c = 0
-        linearized = 0
-      else
-        dist = norm(r_prev - r_obs)
-        normal_dist = α*1/(2*π*σ^2)^(3/2)*exp(-dist^2/(2*σ^2))
-        a = smooth_max((radius_obs + ε)^2 - dist^2)
-        b = smooth_max(dist^2 - radius_obs^2)
-        η = a/(a+b)
-        c = η*normal_dist
-
-        # Derivatives
-        if (radius_obs + ε)^2 - dist^2 > 0
-          ∇a = ((radius_obs + ε)^2 - dist^2)^(-2)*(-2*(r_prev-r_obs))*exp(-((radius_obs + ε)^2 - dist^2)^(-1))
-        else
-          ∇a = zeros(3)
-        end
-
-        if dist^2 - radius_obs^2 > 0
-          ∇b = (dist^2 - radius_obs^2)^(-2)*(2*(r_prev-r_obs))*exp(-(dist^2 - radius_obs^2)^(-1))
-        else
-          ∇b = zeros(3)
-        end
-
-        ∇η = ∇a/(a + b) - a/(a + b)^2*(∇a + ∇b)
-        ∇normal_dist = α*(2*π*σ^2)^(-3/2)*exp(-1/2*dist^2/σ^2)*(-2*(r_prev - r_obs))/(2*σ^2)
-
-        ∇c = η*∇normal_dist + normal_dist*∇η
-
-        linearized = c + ∇c'*(r-r_prev)
+        num += abs((clearance-dist) - linearized) 
+        den += abs(linearized) 
       end
-      num_other += c - linearized
-      den_other += linearized
     end
   end
+  return num/den
 
-  return (num_dyn + abs(num_other))/(den_dyn + abs(den_other)) # TODO: change this in other models
+  # num_other, den_other = 0.,0.
+
+  # for k in 1:N
+  #   r = get_workspace_location(traj, SCPP, k)
+  #   r_prev = get_workspace_location(traj_prev, SCPP, k)
+  #   for obs in obstacle_set
+  #     r_obs = origin(obs)
+  #     radius_obs = radius(obs)
+  #     ε = 1e-1  # Smooth gap from sphere edge
+  #     σ = 1.
+  #     # α = (SCPP.param.alg.ε)/(1/(2*π*σ^2)^(3/2)*exp(-radius_obs^2/(2*σ^2)))
+  #     α = 1e3
+
+  #     if norm(r_prev - r_obs) >= radius_obs + ε
+  #       c = 0
+  #       linearized = 0
+  #     else
+  #       dist = norm(r_prev - r_obs)
+  #       normal_dist = α*1/(2*π*σ^2)^(3/2)*exp(-dist^2/(2*σ^2))
+  #       a = smooth_max((radius_obs + ε)^2 - dist^2)
+  #       b = smooth_max(dist^2 - radius_obs^2)
+  #       η = a/(a+b)
+  #       c = η*normal_dist
+
+  #       # Derivatives
+  #       if (radius_obs + ε)^2 - dist^2 > 0
+  #         ∇a = ((radius_obs + ε)^2 - dist^2)^(-2)*(-2*(r_prev-r_obs))*exp(-((radius_obs + ε)^2 - dist^2)^(-1))
+  #       else
+  #         ∇a = zeros(3)
+  #       end
+
+  #       if dist^2 - radius_obs^2 > 0
+  #         ∇b = (dist^2 - radius_obs^2)^(-2)*(2*(r_prev-r_obs))*exp(-(dist^2 - radius_obs^2)^(-1))
+  #       else
+  #         ∇b = zeros(3)
+  #       end
+
+  #       ∇η = ∇a/(a + b) - a/(a + b)^2*(∇a + ∇b)
+  #       ∇normal_dist = α*(2*π*σ^2)^(-3/2)*exp(-1/2*dist^2/σ^2)*(-2*(r_prev - r_obs))/(2*σ^2)
+
+  #       ∇c = η*∇normal_dist + normal_dist*∇η
+
+  #       linearized = c + ∇c'*(r-r_prev)
+  #     end
+  #     num_other += c - linearized
+  #     den_other += linearized
+  #   end
+  # end
+
+  # return (num_dyn + abs(num_other))/(den_dyn + abs(den_other)) # TODO: change this in other models
 end
 
 function trust_region_ratio_trajopt(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}) where {T,E}
@@ -683,58 +702,83 @@ function trust_region_ratio_trajopt(traj, traj_prev::Trajectory, SCPP::SCPProble
     den += (ϕ_old-ϕ_hat_new) 
   end
 
-  obstacle_set = SCPP.PD.env.obstacle_set
+  clearance = model.clearance
 
   for k in 1:N
-    r = get_workspace_location(traj, SCPP, k)
-    r_prev = get_workspace_location(traj_prev, SCPP, k)
+    r0 = get_workspace_location(traj, SCPP, k)
+    r = get_workspace_location(traj_prev, SCPP, k)
+    for (rb_idx,body_point) in enumerate(env_.convex_robot_components)
+      for (env_idx,convex_env_component) in enumerate(env_.convex_env_components)
+        dist,xbody,xobs = BulletCollision.distance(env_,rb_idx,r0,env_idx)
+        ϕ_old = clearance-dist
+        
+        dist,xbody,xobs = BulletCollision.distance(env_,rb_idx,r,env_idx)
+        nhat = dist > 0 ?
+          (xbody-xobs)./norm(xbody-xobs) :
+          (xobs-xbody)./norm(xobs-xbody) 
+        ϕ_new = clearance-dist
+        ϕ_hat_new = clearance - (dist + nhat'*(r-r0))
 
-    for obs in obstacle_set
-      r_obs = origin(obs)
-      radius_obs = radius(obs)
-      ε = 1e-1  # Smooth gap from sphere edge
-      σ = 1.
-      # α = (SCPP.param.alg.ε)/(1/(2*π*σ^2)^(3/2)*exp(-radius_obs^2/(2*σ^2)))
-      α = 1e3
-
-      if norm(r_prev - r_obs) >= radius_obs + ε
-        c = 0
-        linearized = 0
-      else
-        dist = norm(r_prev - r_obs)
-        normal_dist = α*1/(2*π*σ^2)^(3/2)*exp(-dist^2/(2*σ^2))
-        a = smooth_max((radius_obs + ε)^2 - dist^2)
-        b = smooth_max(dist^2 - radius_obs^2)
-        η = a/(a+b)
-        c = η*normal_dist
-
-        # Derivatives
-        if (radius_obs + ε)^2 - dist^2 > 0
-          ∇a = ((radius_obs + ε)^2 - dist^2)^(-2)*(-2*(r_prev-r_obs))*exp(-((radius_obs + ε)^2 - dist^2)^(-1))
-        else
-          ∇a = zeros(3)
-        end
-
-        if dist^2 - radius_obs^2 > 0
-          ∇b = (dist^2 - radius_obs^2)^(-2)*(2*(r_prev-r_obs))*exp(-(dist^2 - radius_obs^2)^(-1))
-        else
-          ∇b = zeros(3)
-        end
-
-        ∇η = ∇a/(a + b) - a/(a + b)^2*(∇a + ∇b)
-        ∇normal_dist = α*(2*π*σ^2)^(-3/2)*exp(-1/2*dist^2/σ^2)*(-2*(r_prev - r_obs))/(2*σ^2)
-
-        ∇c = η*∇normal_dist + normal_dist*∇η
-
-        ϕ_new = c
-        ϕ_hat_new = c + ∇c'*(r-r_prev)
+        num += (ϕ_old-ϕ_new)
+        den += (ϕ_old-ϕ_hat_new) 
       end
-      num += (ϕ_old-ϕ_new)
-      den += (ϕ_old-ϕ_hat_new) 
     end
   end
 
   return num/den
+
+  # obstacle_set = SCPP.PD.env.obstacle_set
+
+  # for k in 1:N
+  #   r = get_workspace_location(traj, SCPP, k)
+  #   r_prev = get_workspace_location(traj_prev, SCPP, k)
+
+  #   for obs in obstacle_set
+  #     r_obs = origin(obs)
+  #     radius_obs = radius(obs)
+  #     ε = 1e-1  # Smooth gap from sphere edge
+  #     σ = 1.
+  #     # α = (SCPP.param.alg.ε)/(1/(2*π*σ^2)^(3/2)*exp(-radius_obs^2/(2*σ^2)))
+  #     α = 1e3
+
+  #     if norm(r_prev - r_obs) >= radius_obs + ε
+  #       c = 0
+  #       linearized = 0
+  #     else
+  #       dist = norm(r_prev - r_obs)
+  #       normal_dist = α*1/(2*π*σ^2)^(3/2)*exp(-dist^2/(2*σ^2))
+  #       a = smooth_max((radius_obs + ε)^2 - dist^2)
+  #       b = smooth_max(dist^2 - radius_obs^2)
+  #       η = a/(a+b)
+  #       c = η*normal_dist
+
+  #       # Derivatives
+  #       if (radius_obs + ε)^2 - dist^2 > 0
+  #         ∇a = ((radius_obs + ε)^2 - dist^2)^(-2)*(-2*(r_prev-r_obs))*exp(-((radius_obs + ε)^2 - dist^2)^(-1))
+  #       else
+  #         ∇a = zeros(3)
+  #       end
+
+  #       if dist^2 - radius_obs^2 > 0
+  #         ∇b = (dist^2 - radius_obs^2)^(-2)*(2*(r_prev-r_obs))*exp(-(dist^2 - radius_obs^2)^(-1))
+  #       else
+  #         ∇b = zeros(3)
+  #       end
+
+  #       ∇η = ∇a/(a + b) - a/(a + b)^2*(∇a + ∇b)
+  #       ∇normal_dist = α*(2*π*σ^2)^(-3/2)*exp(-1/2*dist^2/σ^2)*(-2*(r_prev - r_obs))/(2*σ^2)
+
+  #       ∇c = η*∇normal_dist + normal_dist*∇η
+
+  #       ϕ_new = c
+  #       ϕ_hat_new = c + ∇c'*(r-r_prev)
+  #     end
+  #     num += (ϕ_old-ϕ_new)
+  #     den += (ϕ_old-ϕ_hat_new) 
+  #   end
+  # end
+
+  # return num/den
 end
 
 function trust_region_ratio_mao(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}) where {T,E}
@@ -756,14 +800,6 @@ end
 ##################
 # Shooting Method
 ##################
-function get_dual_cvx(prob::Convex.Problem, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}, solver) where {T,E}
-	if solver == "Mosek"
-		return -MathProgBase.getdual(prob.model)[1:SCPP.PD.model.x_dim]
-	else
-		return []
-	end
-end
-
 function get_dual_jump(SCPC::SCPConstraints, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}) where {T,E}
   init_constraint_category = SCPC.convex_state_eq[:cse_init_constraints][1]
   -JuMP.dual.([init_constraint_category.con_reference[0,(i,)] for i = init_constraint_category.ind_other[1]])
