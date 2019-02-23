@@ -9,7 +9,7 @@ include("dynamics/dubins_car.jl")
 include("dynamics/doubleint_r2.jl")
 
 export get_dt_from_SCPP, get_params_from_SCPP
-export f_dt, f_dt_dx, f_dt_du
+export f_dt, f_dt_dx, f_dt_du, f_dt_dxu
 
 macro constraint_abbrev(traj, traj_prev, SCPP)
 	quote
@@ -104,3 +104,7 @@ function f_dt_du(x::Vector{T}, u_step::Vector{T}, SCPP::SCPProblem) where T<:Abs
     # \dot{x} = f(x,u) => x_{k+1} \approx x_{k} + f(x,u)*dt    
 	return (B_dyn(x, u_step, SCPP.PD.robot, SCPP.PD.model) * @get_dt_from_SCPP(SCPP))
 end
+function f_dt_dxu(x::Vector{T}, u_step::Vector{T}, SCPP::SCPProblem) where T<:AbstractFloat
+	return hcat(f_dt_dx(x, u_step, SCPP), f_dt_du(x, u_step, SCPP))
+end
+

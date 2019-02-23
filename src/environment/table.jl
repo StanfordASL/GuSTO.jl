@@ -69,7 +69,8 @@ function Table{T}(worldAABBmin::AbstractArray{T}, worldAABBmax::AbstractArray{T}
     # --------------------------
     # Canyon (passage in middle)
     middle = worldAABBmin + 0.5*(worldAABBmax-worldAABBmin)
-    a,b,c = 0.25, 0.25, 0.01
+    a,b,c = 0.25, 0.31, 0.01
+    #a,b,c = 0.25, 0.37, 0.01
     push!(koz_min, [middle[1]-a,  middle[2]+b,     -c])
     push!(koz_max, [middle[1]+a,  worldAABBmax[2],  c])
     push!(koz_min, [middle[1]-a,  worldAABBmin[2], -c])

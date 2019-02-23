@@ -29,7 +29,8 @@ end
 # CVX 
 ######
 
-function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", max_iter=50, force=false; kwarg...)
+function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, 
+						  solver="Mosek", max_iter=50, force=false; kwarg...)
 	# pygui(true)
 	# Solves a sequential convex programming problem
 	# Inputs:
@@ -46,6 +47,8 @@ function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", m
 		set_default_solver(SCSSolver(; kwarg...))
 	end
 
+	X_vec,Sigmas_vec = [],[]
+
 	N = SCPP.N
 	param, model = SCPP.param, SCPP.PD.model
 
@@ -61,6 +64,7 @@ function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", m
 	SCPC = SCPConstraints(SCPP)
 
 	initialize_model_params!(SCPP, SCPS.traj)
+
   	push!(SCPS.J_true, cost_true(SCPS.traj, SCPS.traj, SCPP))
 	push!(rho_vec, trust_region_ratio_gusto(SCPS.traj, SCPS.traj, SCPP))
 	param.obstacle_toggle_distance = Delta_vec[end]/8 + model.clearance # TODO: Generalize clearance
@@ -72,6 +76,10 @@ function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", m
 
 		# Set up, solve problem
 		update_model_params!(SCPP, SCPS.traj)
+
+		push!(X_vec, copy(SCPS.traj.X))
+		push!(Sigmas_vec, copy(SCPP.PD.model.Sigmas))
+
 		prob.objective = cost_full_convexified_gusto(SCPV, SCPS.traj, SCPC, SCPP)
 		prob.constraints = add_constraints_gusto_cvx(SCPV, SCPS.traj, SCPC, SCPP)
 		Convex.solve!(prob, warmstart=!first_time)
@@ -146,7 +154,13 @@ function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Mosek", m
 		   (SCPS.iterations > 4 && convex_ineq_satisfied_vec[end] == true)
 			SCPS.converged = true
 			convex_ineq_satisfied_vec[end] && (SCPS.successful == true)
+
+			push!(X_vec, copy(SCPS.traj.X))
+			push!(Sigmas_vec, copy(SCPP.PD.model.Sigmas))
+
+			force ? continue : return X_vec,Sigmas_vec
 			force ? continue : break
+
 		end
 	end
 
@@ -254,6 +268,9 @@ function convex_ineq_satisfied_gusto(traj::Trajectory, traj_prev::Trajectory, SC
   # checks for satisfaction of convex state inequalities and nonconvex->convexified state inequalities
 	for (f, k, i) in (SCPC.convex_state_ineq..., SCPC.nonconvex_state_convexified_ineq...)
 		if f(traj, traj_prev, SCPP, k, i) > SCPP.param.alg.epsilon
+			println("[scp_gusto.jl::convex_ineq_satisfied_gusto] not satisfied.")
+			@show f
+			@show k
 			return false
 		end
 	end

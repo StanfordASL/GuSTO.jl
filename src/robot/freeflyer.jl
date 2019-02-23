@@ -49,6 +49,7 @@ function Freeflyer{T}() where T
   wheel_torque_limit = 0.593        # 84 oz-in (https://www.pololu.com/product/2822/specs)
   warn("[freeflyer.jl::Freeflyer] Reducing hard_limit_alpha.")
   hard_limit_alpha = 0.001*J_w_inv*wheel_torque_limit
+  #hard_limit_alpha = J_w_inv*wheel_torque_limit
 
   # Position and Jacobian of gripped
   xb = [0.; 0.15; 0.]
