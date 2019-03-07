@@ -166,8 +166,8 @@ function add_constraints_trajopt_cvx(SCPV::SCPVariables, traj_prev::Trajectory, 
   for (f, k, j, i) in SCPC.convex_state_eq 
 		constraints += f(SCPV, traj_prev, SCPP, k, j, i) == 0
 	end
-  for (f, k, i) in SCPC.convex_state_goal_ineq
-		constraints += f(SCPV, traj_prev, SCPP, k, i) <= 0
+  for (f, k, j, i) in SCPC.convex_state_goal_ineq
+		constraints += f(SCPV, traj_prev, SCPP, k, j, i) <= 0
 	end
  
 	return constraints
