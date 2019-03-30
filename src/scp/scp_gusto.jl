@@ -103,7 +103,7 @@ function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Ipopt", 
 
 		push!(SCPS.prob_status, JuMP.termination_status(SCPS.solver_model))
 		if SCPS.prob_status[end] ∉ (MOI.OPTIMAL, MOI.LOCALLY_SOLVED)
-		  warn("GuSTO SCP iteration failed to find an optimal solution")
+		  @warn("GuSTO SCP iteration failed to find an optimal solution")
 		  push!(SCPS.iter_elapsed_times, (time_ns() - time_start)/10^9) 
 		  return
 		end
@@ -150,7 +150,7 @@ function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Ipopt", 
 		SCPS.iterations += 1
 
 		if ω_vec[end] > ω_max
-			warn("GuSTO SCP omegamax exceeded")
+			@warn("GuSTO SCP omegamax exceeded")
 			break
 		end
 		!SCPS.accept_solution[end] ? continue : nothing

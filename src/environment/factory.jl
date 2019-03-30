@@ -9,16 +9,16 @@ mutable struct Factory{T<:AbstractFloat} <: Environment
 end
 
 function Factory{T}() where T
-  worldAABBmin = -1000.*ones(T,3) 
-  worldAABBmax = 1000.*ones(T,3)
+  worldAABBmin = -1000 .* ones(T,3) 
+  worldAABBmax = 1000 .* ones(T,3)
 
-  keepin_zones = Vector{HyperRectangle}(0)
+  keepin_zones = Vector{HyperRectangle}(undef,0)
   push!(keepin_zones,
     HyperRectangle(Vec3f0(worldAABBmin),Vec3f0(worldAABBmax-worldAABBmin)))
 
-  keepout_zones = Vector{GeometryTypes.GeometryPrimitive}(0)
+  keepout_zones = Vector{GeometryTypes.GeometryPrimitive}(undef,0)
 
-  obstacle_set = Vector{GeometryTypes.GeometryPrimitive}(0)
+  obstacle_set = Vector{GeometryTypes.GeometryPrimitive}(undef,0)
 
   return Factory{T}(worldAABBmin, worldAABBmax, keepin_zones, keepout_zones, obstacle_set)
 end

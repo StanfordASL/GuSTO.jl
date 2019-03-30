@@ -1,5 +1,4 @@
 # __precompile__(false)
-module GuSTO
 
 using BulletCollision
 
@@ -44,4 +43,3 @@ include("robot.jl")
 include("dynamics.jl")
 include("environment.jl")
 
-end

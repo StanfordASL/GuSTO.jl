@@ -96,8 +96,8 @@ function solve_trajopt_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Ipopt"
         # Set up, solve problem
         update_model_params!(SCPP, SCPS.traj)
         add_variables_jump!(SCPS, SCPV, SCPP)
-        add_constraints_trajopt_jump!(SCPS, SCPV, SCPC, SCPP)   # TODO(acauligi)
-        add_objective_trajopt_jump!(SCPS, SCPV, SCPC, SCPP)     # TODO(acauligi)
+        add_constraints_trajopt_jump!(SCPS, SCPV, SCPC, SCPP)
+        add_objective_trajopt_jump!(SCPS, SCPV, SCPC, SCPP)
 
         set_start_value.(SCPV.X, SCPS.traj.X)
         set_start_value.(SCPV.U, SCPS.traj.U)
@@ -210,10 +210,10 @@ function add_objective_trajopt_jump!(SCPS::SCPSolution, SCPV::SCPVariables, SCPC
 		if cc.dimtype == :scalar
 			cc.var_reference = @variable(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)])
 			cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)],
-				mu*cc.func(SCPV, traj_prev, SCPP, k, i...) <= cc.var_reference[k,i])
+        cc.func(SCPV, traj_prev, SCPP, k, i...) <= cc.var_reference[k,i])
 			@constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)],
 				-cc.var_reference[k,i] <= 0.)
-			cost_expr += sum(cc.var_reference[k,i] for k in cc.ind_time, i in Iterators.product(cc.ind_other...))
+			cost_expr += mu*sum(cc.var_reference[k,i] for k in cc.ind_time, i in Iterators.product(cc.ind_other...))
 			set_start_value.(cc.var_reference, 0.)
 		elseif cc.dimtype == :array
 			throw(":array type inequality constraint penalty not implemented")      # TODO(acauligi)
@@ -225,15 +225,23 @@ function add_objective_trajopt_jump!(SCPS::SCPSolution, SCPV::SCPVariables, SCPC
 		if cc.dimtype == :scalar
 			cc.var_reference = @variable(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)])
 			cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)],
-				mu*cc.func(SCPV, traj_prev, SCPP, k, i...) <= cc.var_reference[k,i])
+				cc.func(SCPV, traj_prev, SCPP, k, i...) <= cc.var_reference[k,i])
       @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)],
-				-mu*cc.func(SCPV, traj_prev, SCPP, k, i...) <= cc.var_reference[k,i])         # TODO(acauligi): Need to track this second constraint satisfaction somehow
+				-cc.func(SCPV, traj_prev, SCPP, k, i...) <= cc.var_reference[k,i])         # TODO(acauligi): Need to track this second constraint satisfaction somehow
 			@constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)],
 				-cc.var_reference[k,i] <= 0.)
-			cost_expr += sum(cc.var_reference[k,i] for k in cc.ind_time, i in Iterators.product(cc.ind_other...))
+			cost_expr += mu*sum(cc.var_reference[k,i] for k in cc.ind_time, i in Iterators.product(cc.ind_other...))
 			set_start_value.(cc.var_reference, 0.)
 		elseif cc.dimtype == :array
-			throw(":array type equality constraint penalty not implemented")      # TODO(acauligi)
+			cc.var_reference = @variable(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)])
+			cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)],
+				cc.func(SCPV, traj_prev, SCPP, k, i...) <= cc.var_reference[k,i])
+      @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)],
+				-cc.func(SCPV, traj_prev, SCPP, k, i...) <= cc.var_reference[k,i])         # TODO(acauligi): Need to track this second constraint satisfaction somehow
+			@constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)],
+				-cc.var_reference[k,i] <= 0.)
+			cost_expr += mu*sum(cc.var_reference[k,i] for k in cc.ind_time, i in Iterators.product(cc.ind_other...))
+			set_start_value.(cc.var_reference, 0.)
 		end
 	end
 

@@ -61,7 +61,7 @@ function PandaBot{T}() where T
   tau_max   = [87; 87; 87; 87; 12; 12; 12]                                      # N*m
   taud_max  = [1000; 1000; 1000; 1000; 1000; 1000; 1000]                        # N*m/s
 
-  bubbles = Vector{BulletCollision.BulletCollisionObjectPtr}(0)
+  bubbles = Vector{BulletCollision.BulletCollisionObjectPtr}(undef,0)
   bubble_radii = [0.15; 0.15; 0.15; 0.15; 0.15; 0.15; 0.15; 0.1]
   for bubble_idx in 1:length(bubble_radii)
     push!(bubbles,
@@ -78,8 +78,8 @@ function PandaBot{T}() where T
   q_dot = zeros(n_motors)
   q_ddot = zeros(n_motors)
   state = RigidBodyDynamics.MechanismState(pan.mechanism)
-    set_configuration!(state,q)
-    set_velocity!(state,q_dot)
+  set_configuration!(state,q)
+  set_velocity!(state,q_dot)
 
   # Frame
   world_frame = RigidBodyDynamics.root_frame(pan.mechanism)
