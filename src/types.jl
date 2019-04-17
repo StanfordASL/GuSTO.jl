@@ -111,18 +111,19 @@ SolverStatusTypes = Union{Symbol, MOI.TerminationStatusCode}
 
 mutable struct SCPConstraints
 	## Dynamics constraints
-	dynamics::Dict
+	dynamics::Dict 												# Should be linearized
 
 	## General state constraints
-	convex_state_eq::Dict
+	convex_state_eq::Dict 								# Should be linearized
 	nonconvex_state_eq::Dict
-	nonconvex_state_convexified_eq::Dict
+	nonconvex_state_convexified_eq::Dict 	# Should be linearized
 
 	convex_state_ineq::Dict
 	nonconvex_state_ineq::Dict
 	nonconvex_state_convexified_ineq::Dict
 
 	## Boundary condition state constraints
+	state_init_eq::Dict
 	convex_state_boundary_condition_eq::Dict
 	nonconvex_state_boundary_condition_eq::Dict
 	nonconvex_state_boundary_condition_convexified_eq::Dict
@@ -144,7 +145,7 @@ mutable struct SCPConstraints
 	# TODO(acauligi): only convex_state_bc_ineq, nonconvex_state_bc_ineq, nonconvex_state_bc_convexified_ineq
 	#   are correctly implemented across algorithms
 end
-SCPConstraints() = SCPConstraints((Dict{Symbol, Vector}() for i in 1:17)...)
+SCPConstraints() = SCPConstraints((Dict{Symbol, Vector}() for i in 1:18)...)
 
 mutable struct SCPSolution
 	traj::Trajectory

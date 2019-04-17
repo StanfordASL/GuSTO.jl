@@ -8,15 +8,13 @@ using RigidBodySim, RigidBodyDynamics
 using MeshCat, MeshCatMechanisms
 using CoordinateTransformations
 using Interact, Reactive
-using MAT
-using FileIO
-using MeshIO
+using MAT, FileIO, MeshIO
 using MechanismGeometries
 using ForwardDiff
 import GeometryTypes: HyperRectangle, HyperSphere, HomogenousMesh
 import ColorTypes: RGB, RGBA
 
-using StaticArrays
+using StaticArrays, DataStructures
 using JuMP, Convex
 using Ipopt, Mosek, SCS
 using MathOptInterfaceMosek

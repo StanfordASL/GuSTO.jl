@@ -34,8 +34,8 @@ mutable struct PointGoal <: GoalType
 end
 
 mutable struct BoxGoal <: GoalType
-	upper_bound
 	lower_bound
+	upper_bound
 end
 
 mutable struct BallGoal <: GoalType

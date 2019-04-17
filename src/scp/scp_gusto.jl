@@ -192,12 +192,22 @@ function add_constraints_gusto_jump!(SCPS::SCPSolution, SCPV::SCPVariables, SCPC
 
 	update_model_params!(SCPP, traj_prev)
 
-	for cc_list in values(merge(SCPC.convex_state_eq, SCPC.dynamics))
+	for cc_list in values(SCPC.dynamics)
 		for cc in cc_list
 			if cc.dimtype == :scalar
 				cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)], cc.func(SCPV, traj_prev, SCPP, k, i...) == 0)
 			elseif cc.dimtype == :array
 				cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...)], cc.func(SCPV, traj_prev, SCPP, k, i...) .== 0)
+			end
+		end
+	end
+
+	for cc_list in values(SCPC.state_init_eq)
+		for cc in cc_list
+			if cc.dimtype == :scalar
+				cc.con_reference = @constraint(solver_model, [i=Iterators.product(cc.ind_other...)], cc.func(SCPV, traj_prev, SCPP, 1, i...) == 0)
+			elseif cc.dimtype == :array
+				cc.con_reference = @constraint(solver_model, [i=Iterators.product(cc.ind_other...)], cc.func(SCPV, traj_prev, SCPP, 1, i...) .== 0)
 			end
 		end
 	end
@@ -282,6 +292,22 @@ function add_objective_gusto_jump!(SCPS::SCPSolution, SCPV::SCPVariables, SCPC::
 		end
 	end
 
+	for cc_list in values(SCPC.convex_state_eq)
+		for cc in cc_list
+			if cc.dimtype == :scalar
+				cc.var_reference = @variable(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...),j=1:2])
+				cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...),j=1:2],
+					(-1)^j*ω*cc.func(SCPV, traj_prev, SCPP, k, i...) - SCPP.param.alg.ε <= cc.var_reference[k,i,j])
+				@constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...),j=1:2],
+					-cc.var_reference[k,i,j] <= 0.)
+				cost_expr += sum(cc.var_reference[k,i,j] for k in cc.ind_time, i in Iterators.product(cc.ind_other...), j in 1:2)
+				set_start_value.(cc.var_reference, 0.)
+			elseif cc.dimtype == :array
+				throw("Not implemented")
+			end
+		end
+	end
+
 	@objective(solver_model, Min, cost_expr)
 end
 
@@ -291,12 +317,24 @@ function convex_ineq_satisfied_gusto_jump(traj::Trajectory, traj_prev::Trajector
   for cc_list in values(merge(SCPC.convex_state_ineq, SCPC.nonconvex_state_convexified_ineq))
   	for cc in cc_list
 	  	for k in cc.ind_time, i in Iterators.product(cc.ind_other...)
-	  		if cc.func(traj, traj_prev, SCPP, k, i...) > SCPP.param.alg.ε
+	  		if cc.func(traj, traj_prev, SCPP, k, i...) >= SCPP.param.alg.ε
 					return false
 				end
 	  	end
 	  end
   end
+
+  for cc_list in values(SCPC.convex_state_eq)
+  	for cc in cc_list
+	  	for k in cc.ind_time, i in Iterators.product(cc.ind_other...)
+	  		constraint_value = cc.func(traj, traj_prev, SCPP, k, i...)
+	  		if (constraint_value <= -SCPP.param.alg.ε) || (constraint_value >= SCPP.param.alg.ε)
+					return false
+				end
+	  	end
+	  end
+  end
+
   return true
 
   # TODO: Verify that this works correctly, with effect of ω and Δ

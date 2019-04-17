@@ -21,12 +21,12 @@ end
 ## Dynamics constraints
 nothing
 
-## Convex state boundary condition equality constraints
-function cse_init_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem, k::Int, i::Int)
+function sie_init_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem, k::Int, i::Int)
 	X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,goal_set,x_dim,u_dim,N,dh = @constraint_shortcut(traj, traj_prev, SCPP)
 	X[i,1] - x_init[i]
 end
 
+## Convex state boundary condition equality constraints
 function csbce_goal_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem, goal::G) where G <: Goal{PointGoal}
 	X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,goal_set,x_dim,u_dim,N,dh = @constraint_shortcut(traj, traj_prev, SCPP)
 	ind, point = goal.ind_coordinates, goal.params.point

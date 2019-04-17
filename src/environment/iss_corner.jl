@@ -50,7 +50,7 @@ function update_aabb!(env::ISSCorner)
 end
 
 function add_obstacles!(env::ISSCorner)
-  vars = matread(joinpath(Pkg.dir("GuSTO"), "src", "environment","iss_corner.mat"))
+  vars = matread(joinpath(abspath(joinpath(dirname(Base.find_package("GuSTO")), "..")), "src", "environment","iss_corner.mat"))
   for zone in vars["rectangles"]
     push!(env.obstacle_set,
       HyperRectangle(Vec3f0(zone["corner1"][:]),Vec3f0(zone["corner2"][:]-zone["corner1"][:])))
