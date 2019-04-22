@@ -107,7 +107,7 @@ function quat2dcm(q::Vector{T}, attitude_convention::String="orientation") where
   if attitude_convention == "rotation"
     dcm = dcm'
   elseif attitude_convention != "orientation"
-    warn("Must specify if attitude is rotation or orientation! Defaulting to orientation.")
+    @warn "Must specify if attitude is rotation or orientation! Defaulting to orientation."
   end
   return dcm
 end
@@ -168,7 +168,7 @@ function quat_rotate(q::Vector{T}, v::Vector{T}, attitude_convention::String="or
   if attitude_convention == "rotation"
     qr = quat_inv(q)
   elseif attitude_convention != "orientation"
-    warn("Must specify if quaternion represents rotation or orientation! Defaulting to orientation.")
+    @warn "Must specify if quaternion represents rotation or orientation! Defaulting to orientation."
   end
 
   v_bar = [v; 0]
@@ -219,7 +219,7 @@ function quat2mrp(q::Vector{T}) where T
   # Eq. 249 in Shuster
   # Eq. 22 in Terzakis et al.
   if abs(q[4]+1) < 0.000001
-    warn("Stereographic projection undefined for (0,0,0,-1)")
+    @warn "Stereographic projection undefined for (0,0,0,-1)"
     return -q[1:3]/(1-q[4])
   end
   return q[1:3]/(1+q[4])
@@ -244,7 +244,7 @@ function mrp2dcm(p::Vector{T}, attitude_convention::String="orientation") where 
   if attitude_convention == "rotation"
     dcm = dcm'
   elseif attitude_convention != "orientation"
-    warn("Must specify if attitude is rotation or orientation! Defaulting to orientation.")
+    @warn "Must specify if attitude is rotation or orientation! Defaulting to orientation."
   end
   return dcm
 end

@@ -1,5 +1,5 @@
 export AstrobeeSE3Manifold
-export init_traj_straightline, init_traj_geometricplan
+export init_traj_straightline
 
 mutable struct AstrobeeSE3Manifold <: DynamicsModel
   x_dim   # state: r v p ω
@@ -126,11 +126,6 @@ function init_traj_straightline(TOP::TrajectoryOptimizationProblem{Astrobee3D{T}
   X = hcat(range(x_init, stop=x_goal, length=N)...)
   U = zeros(u_dim,N)
   Trajectory(X, U, tf_guess)
-end
-
-# TODO(acauligi): Add geometric plan
-function int_traj_geometricplan(TOP::TrajectoryOptimizationProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}) where {T,E}
-  return Trajectory(TOP)  # Placeholder
 end
 
 ####################
@@ -312,7 +307,6 @@ function cse_quaternion_norm(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astro
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,goal_set,x_dim,u_dim,N,dh = @scp_shortcut_AstrobeeSE3Manifold(traj, traj_prev, SCPP)
   # return sum(X[6+j,k]^2 for j = 1:4) - 1.0
   qp = Xp[7:10,k] 
-
   return norm(qp) + sum(qp[j]*(X[6+j,k]-Xp[6+j,k])/norm(qp) for j = 1:4) - 1.0 
 end
 
@@ -491,7 +485,6 @@ function ncsi_obstacle_avoidance_signed_distance_convexified(traj, traj_prev::Tr
   clearance = model.clearance
 
   r0 = get_workspace_location(traj_prev, SCPP, k)
-
   dist, xbody, xobs = BulletCollision.distance(env_, rb_idx, r0, env_idx)
 
   if dist < SCPP.param.obstacle_toggle_distance
@@ -511,14 +504,12 @@ end
 ## State trust region inequality constraints
 function stri_state_trust_region(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}, k::Int) where {T,E}
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,goal_set,x_dim,u_dim,N,dh = @scp_shortcut_AstrobeeSE3Manifold(traj, traj_prev, SCPP)
-
   return sum((X[j,k]-Xp[j,k])^2 for j = 1:x_dim)
 end
 
 ## Trust region inequality constraints
 function ctri_control_trust_region(traj, traj_prev::Trajectory, SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E}, k::Int) where {T,E}
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,goal_set,x_dim,u_dim,N,dh = @scp_shortcut_AstrobeeSE3Manifold(traj, traj_prev, SCPP)
-  
   return sum((U[j,k]-Up[j,k])^2 for j = 1:u_dim)
 end
 
@@ -548,9 +539,10 @@ function SCPConstraints(SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E})
   ## Dynamics constraints
   add_constraint_category!(SCPC.dynamics, dynamics_constraints, :array, 2:N)
 
-  ## Init constraints
+  ## State init constraints
   add_constraint_category!(SCPC.state_init_eq, sie_init_constraints, :scalar, 1, 1:x_dim)
-  # add_constraint_category!(SCPC.convex_state_boundary_condition_eq, csbce_goal_constraints, get_first_goal_at_time(goal_set, tf_guess), :array)
+
+  ## State boundary condition constraints
   for goal in values(inclusive(goal_set.goals, searchsortedfirst(goal_set.goals, tf_guess), searchsortedlast(goal_set.goals, tf_guess)))
     if typeof(goal.params) == PointGoal
       add_constraint_category!(SCPC.convex_state_boundary_condition_eq, csbce_goal_constraints, goal, :array)

@@ -559,7 +559,7 @@ end
 
 function trust_region_ratio_trajopt(traj, traj_prev::Trajectory, SCPP::SCPProblem{Plane{T}, Airplane, E}) where {T,E}
   # Where i is the state index, and k is the timestep index
-  X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_astrobeeSE3(traj, traj_prev, SCPP)
+  X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_airplane(traj, traj_prev, SCPP)
   fp = model.f
   num, den = 0, 0
   env_ = WS.btenvironment_keepout
@@ -600,7 +600,7 @@ end
 
 function trust_region_ratio_mao(traj, traj_prev::Trajectory, SCPP::SCPProblem{Plane{T}, Airplane, E}) where {T,E}
   # Where i is the state index, and k is the timestep index
-  X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_astrobeeSE3(traj, traj_prev, SCPP)
+  X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,x_goal,x_dim,u_dim,N,dh = @constraint_abbrev_airplane(traj, traj_prev, SCPP)
   num,den = 0, 0
 
   cost_true_prev = cost_true(traj_prev, traj_prev, SCPP)

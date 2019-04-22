@@ -1,8 +1,8 @@
 export FreeflyerSE2
-export init_traj_straightline, init_traj_geometricplan
+export init_traj_nothing, init_traj_straightline
 
 mutable struct FreeflyerSE2 <: DynamicsModel
-  x_dim   # state: r v p ω
+  x_dim   # state: r θ v ω
   u_dim
   clearance
 
@@ -28,12 +28,12 @@ function SCPParam_GuSTO(model::FreeflyerSE2)
   Δ0 = 3.
   ω0 = 1.
   ω_max = 1.0e10
-  ε = 1.0e-6
+  ε = 1.0e-2
   ρ0 = 0.1
   ρ1 = 0.3
   β_succ = 2.
   β_fail = 0.5
-  γ_fail = 5.
+  γ_fail = 10.
 
   SCPParam_GuSTO(Δ0, ω0, ω_max, ε, ρ0, ρ1, β_succ, β_fail, γ_fail)
 end
@@ -82,24 +82,32 @@ end
 #############################
 # Trajectory Initializations
 #############################
-function init_traj_straightline(TOP::TrajectoryOptimizationProblem{Freeflyer{T}, FreeflyerSE2, E}) where {T,E}
+function init_traj_nothing(TOP::TrajectoryOptimizationProblem{Freeflyer{T}, FreeflyerSE2, E}) where {T,E}
   model, x_init, goal_set = TOP.PD.model, TOP.PD.x_init, TOP.PD.goal_set
   x_dim, u_dim, N, tf_guess = model.x_dim, model.u_dim, TOP.N, TOP.tf_guess
 
+  goal_final = get_first_goal_at_time(goal_set, tf_guess)
+  x_goal = goal_final.params.point
+
+  X = repmat(0.5(x_init + x_goal),1,N)
+  U = zeros(u_dim,N)
+  Trajectory(X, U, tf_guess)
+end
+
+function init_traj_straightline(TOP::TrajectoryOptimizationProblem{Freeflyer{T}, FreeflyerSE2, E}) where {T,E}
+  model, x_init, goal_set = TOP.PD.model, TOP.PD.x_init, TOP.PD.goal_set
+  x_dim, u_dim, N, tf_guess = model.x_dim, model.u_dim, TOP.N, TOP.tf_guess
+  
+  # Set last state to the center of the goal defined latest in time
+  t_goal_final = last(goal_set.goals)[1]
   x_goal = zeros(x_dim)
-  for goal in values(inclusive(goal_set.goals, searchsortedfirst(goal_set.goals, tf_guess), searchsortedlast(goal_set.goals, tf_guess)))
+  for goal in values(inclusive(goal_set.goals, searchequalrange(goal_set.goals, t_goal_final)))
     x_goal[goal.ind_coordinates] = center(goal.params)
   end
 
   X = hcat(range(x_init, stop=x_goal, length=N)...)
   U = zeros(u_dim, N)
-
   Trajectory(X, U, tf_guess)
-end
-
-# TODO(acauligi): Add geometric plan
-function int_traj_geometricplan(TOP::TrajectoryOptimizationProblem{Freeflyer{T}, FreeflyerSE2, E}) where {T,E}
-  return Trajectory(TOP)  # Placeholder
 end
 
 ####################
@@ -212,6 +220,7 @@ function B_dyn_discrete(x, dt, robot::Robot, model::FreeflyerSE2)
   return B
 end
 
+## Convex state inequality constraints
 function csi_translational_velocity_bound(traj, traj_prev::Trajectory, SCPP::SCPProblem{Freeflyer{T}, FreeflyerSE2, E}, k::Int) where {T,E}
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,goal_set,x_dim,u_dim,N,dh = @scp_shortcut_freeflyerSE2(traj, traj_prev, SCPP)
   return sum(X[3+j,k]^2 for j = 1:2)  - robot.hard_limit_vel^2
@@ -235,7 +244,7 @@ function cci_angular_accel_bound(traj, traj_prev::Trajectory, SCPP::SCPProblem{F
 end
 
 ## Nonconvex state inequality constraints
-function ncsi_obstacle_avoidance_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{Freeflyer{T}, FreeflyerSE2, E}, k::Int, i::Int) where {T,E}
+function ncsi_body_obstacle_avoidance_constraints(traj, traj_prev::Trajectory, SCPP::SCPProblem{Freeflyer{T}, FreeflyerSE2, E}, k::Int, i::Int) where {T,E}
   X,U,Tf,Xp,Up,Tfp,dtp,robot,model,WS,x_init,goal_set,x_dim,u_dim,N,dh = @scp_shortcut_freeflyerSE2(traj, traj_prev, SCPP)
 
   rb_idx, env_idx = 1, i
@@ -335,9 +344,10 @@ function SCPConstraints(SCPP::SCPProblem{Freeflyer{T}, FreeflyerSE2, E}) where {
   ## Dynamics constraints
   add_constraint_category!(SCPC.dynamics, dynamics_constraints, :array, 2:N)
 
-  ## Convex state equality constraints
-  # Init and goal (add init first for convenience of getting dual)
-  add_constraint_category!(SCPC.convex_state_eq, cse_init_constraints, :scalar, 0, 1:x_dim)
+  ## State init constraints
+  add_constraint_category!(SCPC.state_init_eq, sie_init_constraints, :scalar, 1, 1:x_dim)
+
+  ## State boundary condition constraints
   for goal in values(inclusive(goal_set.goals, searchsortedfirst(goal_set.goals, tf_guess), searchsortedlast(goal_set.goals, tf_guess)))
     if typeof(goal.params) == PointGoal
       add_constraint_category!(SCPC.convex_state_boundary_condition_eq, csbce_goal_constraints, goal, :array)
@@ -353,17 +363,20 @@ function SCPConstraints(SCPP::SCPProblem{Freeflyer{T}, FreeflyerSE2, E}) where {
   ## Nonconvex state equality constraints (convexified)
   nothing
 
-  ## Nonconvex state inequality constraints (convexified)
+  ## Nonconvex state inequality constraints
   env_ = WS.btenvironment_keepout
   N_obs = length(WS.btenvironment_keepout.convex_env_components)
-  add_constraint_category!(SCPC.nonconvex_state_ineq, ncsi_obstacle_avoidance_signed_distance, :scalar, 1:N, 1:N_obs)
+  add_constraint_category!(SCPC.nonconvex_state_ineq, ncsi_body_obstacle_avoidance_constraints, :scalar, 1:N, 1:N_obs)
+
+  ## Nonconvex state inequality constraints (convexified)
+  add_constraint_category!(SCPC.nonconvex_state_convexified_ineq, ncsi_body_obstacle_avoidance_constraints_convexified, :scalar, 1:N, 1:N_obs)
 
   ## Convex control equality constraints
   nothing
 
   ## Convex control inequality constraints
-  add_constraint_category!(SCPC.convex_state_ineq, cci_translational_accel_bound, :scalar, 1:N-1)
-  add_constraint_category!(SCPC.convex_state_ineq, cci_angular_accel_bound, :scalar, 1:N-1)
+  add_constraint_category!(SCPC.convex_control_ineq, cci_translational_accel_bound, :scalar, 1:N-1)
+  add_constraint_category!(SCPC.convex_control_ineq, cci_angular_accel_bound, :scalar, 1:N-1)
 
   ## State trust region ineqality constraints
   add_constraint_category!(SCPC.state_trust_region_ineq, stri_state_trust_region, :scalar, 1:N)
@@ -469,8 +482,8 @@ function trust_region_ratio_mao(traj, traj_prev::Trajectory, SCPP::SCPProblem{Fr
 end
 
 function get_dual_jump(SCPC::SCPConstraints, SCPP::SCPProblem{Freeflyer{T}, FreeflyerSE2, E}) where {T,E}
-  init_constraint_category = SCPC.convex_state_eq[:cse_init_constraints][1]
-  -JuMP.dual.([init_constraint_category.con_reference[0,(i,)] for i = init_constraint_category.ind_other[1]])
+  init_constraint_category = SCPC.state_init_eq[:sie_init_constraints][1]
+  -JuMP.dual.([init_constraint_category.con_reference[(i,)] for i = init_constraint_category.ind_other[1]])
 end
 
 ##################

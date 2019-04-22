@@ -313,11 +313,11 @@ end
 
 function convex_ineq_satisfied_gusto_jump(traj::Trajectory, traj_prev::Trajectory, SCPC::SCPConstraints, SCPP::SCPProblem)
   # checks for satisfaction of convex state inequalities and nonconvex->convexified state inequalities]
-
   for cc_list in values(merge(SCPC.convex_state_ineq, SCPC.nonconvex_state_convexified_ineq))
   	for cc in cc_list
 	  	for k in cc.ind_time, i in Iterators.product(cc.ind_other...)
 	  		if cc.func(traj, traj_prev, SCPP, k, i...) >= SCPP.param.alg.ε
+	  			@show cc.func, k
 					return false
 				end
 	  	end
@@ -329,6 +329,7 @@ function convex_ineq_satisfied_gusto_jump(traj::Trajectory, traj_prev::Trajector
 	  	for k in cc.ind_time, i in Iterators.product(cc.ind_other...)
 	  		constraint_value = cc.func(traj, traj_prev, SCPP, k, i...)
 	  		if (constraint_value <= -SCPP.param.alg.ε) || (constraint_value >= SCPP.param.alg.ε)
+	  			@show cc.func
 					return false
 				end
 	  	end
