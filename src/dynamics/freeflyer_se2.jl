@@ -20,7 +20,7 @@ function FreeflyerSE2()
 end
 
 function SCPParam(model::FreeflyerSE2, fixed_final_time::Bool)
-  convergence_threshold = 0.01
+  convergence_threshold = 1.0e-2
   SCPParam(fixed_final_time, convergence_threshold)
 end
 
@@ -188,6 +188,7 @@ end
 
 function update_f!(f, x::Vector, u::Vector, robot::Robot, model::FreeflyerSE2)
   F, M = u[1:2], u[3]
+  f[1:3] = x[4:6]
   f[4:5] = 1/robot.mass_ff*F
   f[6] = robot.J_ff_inv*M
 end

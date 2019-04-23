@@ -317,7 +317,8 @@ function convex_ineq_satisfied_gusto_jump(traj::Trajectory, traj_prev::Trajector
   	for cc in cc_list
 	  	for k in cc.ind_time, i in Iterators.product(cc.ind_other...)
 	  		if cc.func(traj, traj_prev, SCPP, k, i...) >= SCPP.param.alg.ε
-	  			@show cc.func, k
+	  			# @show cc.func, k
+	  			cc.func(traj, traj_prev, SCPP, k, i...)
 					return false
 				end
 	  	end
@@ -329,7 +330,7 @@ function convex_ineq_satisfied_gusto_jump(traj::Trajectory, traj_prev::Trajector
 	  	for k in cc.ind_time, i in Iterators.product(cc.ind_other...)
 	  		constraint_value = cc.func(traj, traj_prev, SCPP, k, i...)
 	  		if (constraint_value <= -SCPP.param.alg.ε) || (constraint_value >= SCPP.param.alg.ε)
-	  			@show cc.func
+	  			# @show cc.func
 					return false
 				end
 	  	end

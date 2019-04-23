@@ -99,14 +99,16 @@ end
 function init_traj_straightline(TOP::TrajectoryOptimizationProblem{Astrobee3D{T}, AstrobeeSE3, E}) where {T,E}
   model, x_init, goal_set = TOP.PD.model, TOP.PD.x_init, TOP.PD.goal_set
   x_dim, u_dim, N, tf_guess = model.x_dim, model.u_dim, TOP.N, TOP.tf_guess
-
+  
+  # Set last state to the center of the goal defined latest in time
+  t_goal_final = last(goal_set.goals)[1]
   x_goal = zeros(x_dim)
-  for goal in values(inclusive(goal_set.goals, searchsortedfirst(goal_set.goals, tf_guess), searchsortedlast(goal_set.goals, tf_guess)))
+  for goal in values(inclusive(goal_set.goals, searchequalrange(goal_set.goals, t_goal_final)))
     x_goal[goal.ind_coordinates] = center(goal.params)
   end
 
   X = hcat(range(x_init, stop=x_goal, length=N)...)
-  U = zeros(u_dim,N)
+  U = zeros(u_dim, N)
   Trajectory(X, U, tf_guess)
 end
 
