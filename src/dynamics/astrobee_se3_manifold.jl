@@ -555,7 +555,7 @@ function SCPConstraints(SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3Manifold, E})
 
   ## Convex state equality constraints
   # Manifold constraint, not used in E-SCP
-  # add_constraint_category!(SCPC.convex_state_eq, cse_quaternion_norm, :scalar, 1:N)
+  add_constraint_category!(SCPC.convex_state_eq, cse_quaternion_norm, :scalar, 1:N)
 
   ## Convex state inequality constraints
   add_constraint_category!(SCPC.convex_state_ineq, csi_orientation_sign, :scalar, 1:N)

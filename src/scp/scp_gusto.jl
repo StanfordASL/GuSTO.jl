@@ -297,7 +297,7 @@ function add_objective_gusto_jump!(SCPS::SCPSolution, SCPV::SCPVariables, SCPC::
 			if cc.dimtype == :scalar
 				cc.var_reference = @variable(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...),j=1:2])
 				cc.con_reference = @constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...),j=1:2],
-					(-1)^j*ω*cc.func(SCPV, traj_prev, SCPP, k, i...) - SCPP.param.alg.ε <= cc.var_reference[k,i,j])
+					(-1)^j*ω*cc.func(SCPV, traj_prev, SCPP, k, i...) - SCPP.param.alg.ε <= (-1)^j*cc.var_reference[k,i,j])
 				@constraint(solver_model, [k=cc.ind_time,i=Iterators.product(cc.ind_other...),j=1:2],
 					-cc.var_reference[k,i,j] <= 0.)
 				cost_expr += sum(cc.var_reference[k,i,j] for k in cc.ind_time, i in Iterators.product(cc.ind_other...), j in 1:2)
