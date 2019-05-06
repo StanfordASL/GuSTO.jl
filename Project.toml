@@ -6,8 +6,6 @@ desc = "Guaranteed Sequential Trajectory Optimization (GuSTO) framework."
 version = "1.0.0"
 
 [deps]
-AstrobeeRobot = "2e1cbc1c-87bf-59b1-b910-07a65d02f0c0"
-BulletCollision = "b3564421-7037-56b3-90f4-5b7f54e2ead3"
 ColorTypes = "3da002f7-5984-5a60-b8a6-cbb66c0b333f"
 Convex = "f65535da-76fb-5f13-bab9-19810c17039a"
 CoordinateTransformations = "150eb455-5306-5404-9cee-2592286d6298"
