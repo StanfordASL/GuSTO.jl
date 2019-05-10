@@ -349,6 +349,7 @@ function SCPConstraints(SCPP::SCPProblem{Freeflyer{T}, FreeflyerSE2, E}) where {
   add_constraint_category!(SCPC.state_init_eq, sie_init_constraints, :scalar, 1, 1:x_dim)
 
   ## State boundary condition constraints
+  goal_set, tf_guess = SCPP.PD.goal_set, SCPP.tf_guess
   for goal in values(inclusive(goal_set.goals, searchsortedfirst(goal_set.goals, tf_guess), searchsortedlast(goal_set.goals, tf_guess)))
     if typeof(goal.params) == PointGoal
       add_constraint_category!(SCPC.convex_state_boundary_condition_eq, csbce_goal_constraints, goal, :array)
