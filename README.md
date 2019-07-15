@@ -16,3 +16,7 @@ Click to watch demo video:
 
 <a href="https://www.youtube.com/watch?v=GHehE-If5nY" target="_blank"><img src="https://img.youtube.com/vi/GHehE-If5nY/0.jpg" 
 alt="cla" width="240" height="180" border="10" /></a>
+
+## References
+* R. Bonalli, A. Cauligi, A. Bylard, and M. Pavone, ["GuSTO: Guaranteed Sequential Trajectory Optimization via Sequential Convex Programming,"](https://arxiv.org/abs/1903.00155) in *Proc. IEEE Conf. on Robotics and Automation*, 2019.
+* R. Bonalli, A. Bylard, A. Cauligi, T. Lew, and M. Pavone, ["Trajectory Optimization on Manifolds: A Theoretically-Guaranteed Embedded Sequential Convex Programming Approach,"](https://arxiv.org/abs/1903.00155) in *Robotics: Science and Systems*, 2019.
