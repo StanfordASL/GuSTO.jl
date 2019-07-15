@@ -80,11 +80,13 @@ function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Ipopt", 
 
 		# TODO: Avoid reconstructing the problem from scratch
 		if solver == "Mosek"
-			SCPS.solver_model = Model(with_optimizer(SCIP.Optimizer; kwarg...))
+			SCPS.solver_model = Model(with_optimizer(Mosek.Optimizer; kwarg...))
 		elseif solver == "Gurobi"
 			SCPS.solver_model = Model(with_optimizer(Gurobi.Optimizer; kwarg...))
 		elseif solver == "Ipopt"
 			SCPS.solver_model = Model(with_optimizer(Ipopt.Optimizer; kwarg...))
+		elseif solver == "SCS"
+			SCPS.solver_model = Model(with_optimizer(SCS.Optimizer; kwarg...))
 		else 	# Default solver
 			SCPS.solver_model = Model(with_optimizer(Ipopt.Optimizer; kwarg...))
 		end

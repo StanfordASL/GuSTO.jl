@@ -17,7 +17,7 @@ import ColorTypes: RGB, RGBA
 using StaticArrays, DataStructures
 using JuMP, Convex
 using Ipopt, Mosek, SCS
-using MathOptInterfaceMosek
+using MosekTools
 using Gurobi
 using MathProgBase, MathOptInterface
 using NLsolve, DifferentialEquations
