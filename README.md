@@ -1,25 +1,15 @@
-GuSTO.jl
-========
+# GuSTO.jl: Guaranteed Sequential Trajectory Optimization
 
-This is a suite for trajectory optimization using the Guaranteed Sequential Trajectory Optimization (GuSTO) framework. Details can be found in [this paper](http://asl.stanford.edu/wp-content/papercite-data/pdf/Bonalli.Cauligi.Bylard.Pavone.ICRA19.pdf).
+This is a Julia suite for trajectory optimization using the Guaranteed Sequential Trajectory Optimization (GuSTO) framework. Details can be found in [this paper](https://arxiv.org/abs/1903.00155).
 
-Installation
-------------
-The code has been tested for Ubuntu 16.04 and requires [julia v0.6.4](https://julialang.org/downloads/oldreleases.html). To install GuSTO, run the following command from the Julia REPL:
+GuSTO.jl runs on julia v1.0+, though an older version running on [julia v0.6.4](https://julialang.org/downloads/oldreleases.html) can be found in the julia-v0.6 branch.
 
-```
-Pkg.clone("git://github.com/StanfordASL/GuSTO.jl.git")
-```
+Also required are the [BulletCollision.jl](https://github.com/StanfordASL/BulletCollision.jl) and [AstrobeeRobot.jl](https://github.com/StanfordASL/AstrobeeRobot.jl) packages. GuSTO.jl performs optimization through the [JuMP.jl](https://github.com/JuliaOpt/JuMP.jl) interface, and Gurobi and Ipopt are currently used in examples.
 
-The Julia interfaces to the required optimization solvers will be installed during the build step, but the user must check the specific package instructions for downloading the binary or license files as necessary:
- * The convex optimization problems are designed to be solved with either [Gurobi](https://github.com/JuliaOpt/Gurobi.jl) or [Mosek](https://github.com/JuliaOpt/Mosek.jl), but the user can specify the free [SCS](https://github.com/JuliaOpt/SCS.jl) solver as well. 
- *  The shooting method scripts require [Ipopt](https://github.com/JuliaOpt/Ipopt.jl).
-
-Quickstart
-------------
+# Quickstart
 An example notebook can be run through:
 ```
-jupyter notebook examples/astrobeeSE3.ipynb 
+jupyter notebook examples/freeflyerSE2.ipynb 
 ```
 
 Click to watch demo video:
