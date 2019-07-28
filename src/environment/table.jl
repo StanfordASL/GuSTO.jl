@@ -6,6 +6,21 @@ mutable struct Table{T<:AbstractFloat} <: Environment
   keepin_zones::Vector
   keepout_zones::Vector
   obstacle_set::Vector
+
+  # -----------------------------------
+  # CoRL- Additional start / end  zones
+  safe_region_type::String # "ball" or "rectangle" (2d)
+  # for each dim "i", provides a constraint as
+  # [coeffs[i][1]*x + coeffs[i][2]*y + coeffs[i][3]*z + coeffs[i][4] < 0
+  safe_region_coeffs::Array{Vector{T}} 
+  safe_region_smallest_width::T
+  safe_region_height::T
+  safe_region_width::T
+
+  # goal_region_type::String # "ball" or "rectangle" (2d)
+  # goal_region_position::Vector{T}
+  # goal_region_radius::T
+  # -----------------------------------
 end
 
 function Table{T}(room::Symbol=:ames) where T
@@ -70,7 +85,9 @@ function Table{T}(worldAABBmin::AbstractArray{T}, worldAABBmax::AbstractArray{T}
     # Canyon (passage in middle)
     middle = worldAABBmin + 0.5*(worldAABBmax-worldAABBmin)
     a,b,c = 0.25, 0.31, 0.01
-    #a,b,c = 0.25, 0.37, 0.01
+    a,b,c = 0.25, 0.35, 0.01
+    # a,b,c = 0.25, 0.41, 0.01
+    # a,b,c = 0.25, 0.51, 0.01
     push!(koz_min, [middle[1]-a,  middle[2]+b,     -c])
     push!(koz_max, [middle[1]+a,  worldAABBmax[2],  c])
     push!(koz_min, [middle[1]-a,  worldAABBmin[2], -c])
@@ -79,10 +96,40 @@ function Table{T}(worldAABBmin::AbstractArray{T}, worldAABBmax::AbstractArray{T}
     # --------------------------
   end
 
+
   for i in 1:length(koz_min)
     push!(keepout_zones, HyperRectangle(koz_min[i]..., (koz_max[i]-koz_min[i])...))
   end
   obstacle_set = Vector{GeometryTypes.GeometryPrimitive}(0)
 
-  return Table{T}(worldAABBmin, worldAABBmax, keepin_zones, keepout_zones, obstacle_set)
+
+  # -----------------------------------
+  # CoRL- Additional start / end  zones
+
+  # Safe region
+  safe_region_type = "rectangle"
+  nb_edges = 4
+  rght_safe_x = 1.35
+  left_safe_x = 0.3
+  top_safe_y  = 2.4
+  btm_safe_y  = 0.3
+  safe_region_coeffs = fill(Float64[], nb_edges)
+  safe_region_coeffs[1] = [1.,  0., 0., -rght_safe_x]
+  safe_region_coeffs[2] = [-1., 0., 0.,  left_safe_x]
+  safe_region_coeffs[3] = [0.,  1., 0., -top_safe_y ]
+  safe_region_coeffs[4] = [0., -1., 0.,  btm_safe_y ]
+  safe_region_smallest_width = min(rght_safe_x-left_safe_x, top_safe_y-btm_safe_y)
+  safe_region_height = top_safe_y  - btm_safe_y
+  safe_region_width  = rght_safe_x - left_safe_x
+
+  #  Goal / end region
+  # goal_region_type = "ball"
+  # goal_region_position = [0.85; 0.8; 0.]
+  # goal_region_radius   = 0.6
+  # -----------------------------------
+
+
+  return Table{T}(worldAABBmin, worldAABBmax, keepin_zones, keepout_zones, obstacle_set,
+                  safe_region_type, safe_region_coeffs, 
+                  safe_region_smallest_width, safe_region_height, safe_region_width)
 end

@@ -32,6 +32,10 @@ function Freeflyer{T}() where T
 
 	mass_ff_min = 15.36
 	mass_ff_max = 18.08
+
+  mass_ff_min = 15.0
+  mass_ff_max = 22.0
+
   mass_ff = 0.5*(mass_ff_min+mass_ff_max)
 
   J_ff = 0.184 
@@ -100,7 +104,8 @@ function get_x_min_max(model::D, robot::Freeflyer) where D <: DynamicsModel
 end
 
 function get_u_min_max(model::D, robot::Freeflyer) where D <: DynamicsModel
-  u_min, u_max = zeros(model.u_dim), zeros(model.u_dim)
+  # u_min, u_max = zeros(model.u_dim), zeros(model.u_dim)
+  u_min, u_max = zeros(3), zeros(3)
 
   u_min[1:2] = -robot.mass_ff_max * robot.hard_limit_accel
   u_max[1:2] =  robot.mass_ff_max * robot.hard_limit_accel

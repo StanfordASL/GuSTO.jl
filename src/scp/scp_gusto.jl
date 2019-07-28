@@ -173,7 +173,7 @@ update_model_params!(SCPP::SCPProblem, traj_prev::Trajectory) = nothing
 function add_constraints_gusto_cvx(SCPV::SCPVariables, traj_prev::Trajectory, SCPC::SCPConstraints, SCPP::SCPProblem)
 	constraints = Convex.Constraint[]
 
-	update_model_params!(SCPP, traj_prev)
+	# update_model_params!(SCPP, traj_prev)
 
 	for (f, k, i) in (SCPC.convex_state_eq..., SCPC.dynamics...)
 		constraints += f(SCPV, traj_prev, SCPP, k, i) == 0.
@@ -301,7 +301,7 @@ end
 function add_constraints_gusto_jump!(SCPS::SCPSolution, SCPV::SCPVariables, SCPC::SCPConstraints, SCPP::SCPProblem)
 	solver_model, traj_prev = SCPS.solver_model, SCPS.traj
 
-	update_model_params!(SCPP, traj_prev)
+	# update_model_params!(SCPP, traj_prev)
 
 	for (f, k, i) in (SCPC.convex_state_eq..., SCPC.dynamics...)
 		# @constraint(solver_model, f(SCPV, traj_prev, SCPP, k, i) .== 0.)
