@@ -82,9 +82,14 @@ function Table{T}(worldAABBmin::AbstractArray{T}, worldAABBmax::AbstractArray{T}
 
 
     # --------------------------
+    # --------------------------
+    # --------------------------
     # Canyon (passage in middle)
     middle = worldAABBmin + 0.5*(worldAABBmax-worldAABBmin)
     a,b,c = 0.25, 0.31, 0.01
+
+    # ******************************************
+    # SIMULATION
     a,b,c = 0.25, 0.35, 0.01
     # a,b,c = 0.25, 0.41, 0.01
     # a,b,c = 0.25, 0.51, 0.01
@@ -92,8 +97,87 @@ function Table{T}(worldAABBmin::AbstractArray{T}, worldAABBmax::AbstractArray{T}
     push!(koz_max, [middle[1]+a,  worldAABBmax[2],  c])
     push!(koz_min, [middle[1]-a,  worldAABBmin[2], -c])
     push!(koz_max, [middle[1]+a,  middle[2]-b,      c])
+    # ******************************************
 
-    # --------------------------
+
+    # ******************************************
+    # LAB ENVIRONMENT
+    # ***************
+#     #a,b,c = 0.25, 0.37, 0.01
+
+#     # push!(koz_min, [middle[1]-a,  middle[2]+b,     -c])
+#     # push!(koz_max, [middle[1]+a,  worldAABBmax[2],  c])
+#     # push!(koz_min, [middle[1]-a,  worldAABBmin[2], -c])
+#     # push!(koz_max, [middle[1]+a,  middle[2]-b,      c])
+
+#     # Boxes in lab have width of 28cm
+#     width_box = 0.28
+#     a,b,c = width_box/2., width_box, 0.01
+
+#     push!(koz_min, [middle[1]-a-0.25,  middle[2]+0.46,  -c])
+#     push!(koz_max, [middle[1]+a-0.25,  middle[2]+0.46+b, c])
+
+#     # Obstacle on lower middle
+#     push!(koz_min, [middle[1]-a,  middle[2]-0.46-b, -c])
+#     push!(koz_max, [middle[1]+a,  middle[2]-0.46,    c])
+
+#     push!(koz_min, [middle[1]-a,  worldAABBmin[2],  -c])
+#     push!(koz_max, [middle[1]+a,  worldAABBmin[2]+b, c])
+#     push!(koz_min, [middle[1]-a,  worldAABBmax[2]-b,-c])
+#     push!(koz_max, [middle[1]+a,  worldAABBmax[2],   c])
+
+
+#     # push!(koz_min, [middle[1]-a+0.7,  middle[2]-0.8-b,-c])
+#     # push!(koz_max, [middle[1]+a+0.7,  middle[2]-0.8,   c])
+#     push!(koz_min, [middle[1]-a+0.9,  middle[2]-0.8-b,-c])
+#     push!(koz_max, [middle[1]+a+0.9,  middle[2]-0.8,   c])
+
+
+#     println("Obstacle 1")
+#     println("x: $(middle[1]-a-0.25) y $(middle[2]+0.46)")
+#     println("Obstacle 2")
+#     println("x: $(middle[1]-a) y $(middle[2]-0.46-b)")
+#     println("Obstacle 3")
+#     println("x: $(middle[1]-a) y $(worldAABBmin[2])")
+#     println("Obstacle 4")
+#     println("x: $(middle[1]-a) y $(worldAABBmax[2]-b)")
+#     println("Obstacle 5")
+#     println("x: $(middle[1]-a+0.9) y $(middle[2]-0.8-b)")
+#     # ******************************************
+
+#     # --------------------------
+#     # --------------------------
+#     # --------------------------
+#     # --------------------------
+
+#     ### Nice obstacle set
+# #     push!(koz_min, [middle[1]-a-0.25,  middle[2]+0.46,  -c])
+# #     push!(koz_max, [middle[1]+a-0.25,  middle[2]+0.46+b, c])
+# # 
+# #     # Obstacle on lower middle
+# #     # push!(koz_min, [middle[1]-a,  middle[2]-0.46-b, -c])
+# #     # push!(koz_max, [middle[1]+a,  middle[2]-0.46,    c])
+# # 
+# #     # Obstacle in the middle
+# #     push!(koz_min, [middle[1]-a,  middle[2]-b+0.2, -c])
+# #     push!(koz_max, [middle[1]+a,  middle[2]+0.2,    c])
+# # 
+# #     push!(koz_min, [middle[1]-a,  worldAABBmin[2],  -c])
+# #     push!(koz_max, [middle[1]+a,  worldAABBmin[2]+b, c])
+# #     push!(koz_min, [middle[1]-a,  worldAABBmax[2]-b,-c])
+# #     push!(koz_max, [middle[1]+a,  worldAABBmax[2],   c])
+# # 
+# # 
+# #     # push!(koz_min, [middle[1]-a+0.7,  middle[2]-0.8-b,-c])
+# #     # push!(koz_max, [middle[1]+a+0.7,  middle[2]-0.8,   c])
+# #     push!(koz_min, [middle[1]-a+0.9,  middle[2]-0.8-b,-c])
+# #     push!(koz_max, [middle[1]+a+0.9,  middle[2]-0.8,   c])
+
+
+
+
+#     ### Very Cluttered obstacle set (hardware experiment on Februarz 27)
+#     # --------------------------
   end
 
 
