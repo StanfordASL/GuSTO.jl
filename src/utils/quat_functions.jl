@@ -379,44 +379,44 @@ end
 # end
 
 
-function plot_vector_rotation(Qs::Matrix{T}, v::Matrix{T}=eye(T,3)) where T
-  # Qs: 4xN matrix of quaternions 
-  # v: 3xN vectors to be plotted; defaults to body frame
-
-  n_quat = size(Qs,2)
-  n_vec = size(v,2)
-  slew_matrix = zeros(T,3,n_quat,n_vec)
-
-  for i in 1:n_quat
-    q = Qs[:,i]
-    for j in 1:n_vec
-      slew_matrix[:,i,j] = quat_rotate(q,v[:,j],"rotation")
-    end
-  end
-
-  # unit sphere
-  meshing = 25
-  phi = linspace(0,2*pi,meshing)
-  theta = linspace(0,pi,meshing)
-  x = cos.(phi)*sin.(theta)'
-  y = sin.(phi)*sin.(theta)'
-  z = ones(meshing)*cos.(theta)'
-
-  cs = ["red","green","blue"]
-
-  fig = PyPlot.figure()
-  for i in 1:n_quat
-    clf()
-    PyPlot.plot_wireframe(x,y,z, linestyle="-.", color="blue")
-    for j in 1:n_vec
-      v = slew_matrix[:,i,j]
-      PyPlot.plot3D([0; v[1]], [0; v[2]], [0, v[3]], color=cs[j%3+1])
-    end
-    pause(0.0000001)
-  end
-
-  return fig, slew_matrix
-end
+# function plot_vector_rotation(Qs::Matrix{T}, v::Matrix{T}=eye(T,3)) where T
+#   # Qs: 4xN matrix of quaternions 
+#   # v: 3xN vectors to be plotted; defaults to body frame
+# 
+#   n_quat = size(Qs,2)
+#   n_vec = size(v,2)
+#   slew_matrix = zeros(T,3,n_quat,n_vec)
+# 
+#   for i in 1:n_quat
+#     q = Qs[:,i]
+#     for j in 1:n_vec
+#       slew_matrix[:,i,j] = quat_rotate(q,v[:,j],"rotation")
+#     end
+#   end
+# 
+#   # unit sphere
+#   meshing = 25
+#   phi = linspace(0,2*pi,meshing)
+#   theta = linspace(0,pi,meshing)
+#   x = cos.(phi)*sin.(theta)'
+#   y = sin.(phi)*sin.(theta)'
+#   z = ones(meshing)*cos.(theta)'
+# 
+#   cs = ["red","green","blue"]
+# 
+#   fig = PyPlot.figure()
+#   for i in 1:n_quat
+#     clf()
+#     PyPlot.plot_wireframe(x,y,z, linestyle="-.", color="blue")
+#     for j in 1:n_vec
+#       v = slew_matrix[:,i,j]
+#       PyPlot.plot3D([0; v[1]], [0; v[2]], [0, v[3]], color=cs[j%3+1])
+#     end
+#     pause(0.0000001)
+#   end
+# 
+#   return fig, slew_matrix
+# end
 
 # function plot_q_slew(q_matrix::Array, v::Array=[-1])
 #   # q_matrix: Nx4 matrix
