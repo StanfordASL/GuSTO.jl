@@ -325,7 +325,7 @@ function SCPConstraints(SCPP::SCPProblem{Astrobee3D{T}, AstrobeeSE3, E}) where {
   model = SCPP.PD.model
   x_dim, u_dim, N = model.x_dim, model.u_dim, SCPP.N
   WS = SCPP.WS
-  goal_set = SCPP.PD.goal_set
+  goal_set, tf_guess = SCPP.PD.goal_set, SCPP.tf_guess
 
   SCPC = SCPConstraints()
 
