@@ -622,8 +622,8 @@ function trust_region_ratio_gusto(traj, traj_prev::Trajectory, SCPP::SCPProblem{
   clearance = model.clearance 
 
   for k in 1:N
-    r0 = get_workspace_location(traj, SCPP, k)
-    r = get_workspace_location(traj_prev, SCPP, k)
+    r0 = get_workspace_location(traj_prev, SCPP, k)
+    r = get_workspace_location(traj, SCPP, k)
     for (rb_idx,body_point) in enumerate(env_.convex_robot_components)
       for (env_idx,convex_env_component) in enumerate(env_.convex_env_components)
         dist,xbody,xobs = BulletCollision.distance(env_,rb_idx,r0,env_idx)
@@ -711,8 +711,8 @@ function trust_region_ratio_trajopt(traj, traj_prev::Trajectory, SCPP::SCPProble
   clearance = model.clearance
 
   for k in 1:N
-    r0 = get_workspace_location(traj, SCPP, k)
-    r = get_workspace_location(traj_prev, SCPP, k)
+    r0 = get_workspace_location(traj_prev, SCPP, k)
+    r = get_workspace_location(traj, SCPP, k)
     for (rb_idx,body_point) in enumerate(env_.convex_robot_components)
       for (env_idx,convex_env_component) in enumerate(env_.convex_env_components)
         dist,xbody,xobs = BulletCollision.distance(env_,rb_idx,r0,env_idx)
