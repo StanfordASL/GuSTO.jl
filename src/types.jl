@@ -166,7 +166,7 @@ TrajectoryOptimizationProblem(PD, N, tf_guess; fixed_final_time::Bool=false) = T
 # Initialize a blank trajectory optimization solution
 # TrajectoryOptimizationSolution(TOP::TrajectoryOptimizationProblem) = TrajectoryOptimizationSolution(Trajectory(TOP))
 
-SCPSolution(SCPP::SCPProblem, traj_init::Trajectory) = SCPSolution(traj_init, [], [], [], [:(NA)], [true], [0.], false, false, 0, [], 0., SCPP.param, SCPP)
+SCPSolution(SCPP::SCPProblem, traj_init::Trajectory) = SCPSolution(traj_init, [], [], [], [:(NA)], [true], [0.], false, false, 1, [], 0., SCPP.param, SCPP)
 
 Trajectory(X, U, Tf) = Trajectory(X, U, Tf, Tf/(size(X,2)-1))
 

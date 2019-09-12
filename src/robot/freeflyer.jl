@@ -33,8 +33,8 @@ function Freeflyer{T}() where T
 	mass_ff_min = 15.36
 	mass_ff_max = 18.08
 
-  mass_ff_min = 15.0
-  mass_ff_max = 22.0
+  # mass_ff_min = 15.0
+  # mass_ff_max = 30.0 #22.0
 
   mass_ff = 0.5*(mass_ff_min+mass_ff_max)
 

@@ -61,3 +61,69 @@ function add_obstacles1!(env::ISSCorner)
       HyperSphere(Point3f0(zone["center"][:]), Float32(zone["radius"])))
   end
 end
+
+
+
+function add_obstacles2!(env::ISSCorner)
+  # ----------
+  # RECTANGLES
+
+  bottom_left = Vec3f0(+8.50,-0.50,+4.5)
+  top_right   = Vec3f0(+9.25,+0.25,+5.25)
+  push!(env.obstacle_set, HyperRectangle(bottom_left, top_right-bottom_left))
+  bottom_left = Vec3f0(+10.50,-0.5,+4.75)
+  top_right   = Vec3f0(+11.00,-0.0,+5.00)
+  push!(env.obstacle_set, HyperRectangle(bottom_left, top_right-bottom_left))
+  bottom_left = Vec3f0(+10.75,+3.5,+4.50)
+  top_right   = Vec3f0(+11.50,+4.2,+5.25)
+  push!(env.obstacle_set, HyperRectangle(bottom_left, top_right-bottom_left))
+  bottom_left = Vec3f0(+10.00,+5.5,+4.75)
+  top_right   = Vec3f0(+10.75,+7.0,+5.75)
+  push!(env.obstacle_set, HyperRectangle(bottom_left, top_right-bottom_left))
+  # ----------
+
+
+  # vars = matread(joinpath(Pkg.dir("GuSTO"), "src", "environment","iss_corner.mat"))
+  # for zone in vars["rectangles"]
+  #   push!(env.obstacle_set,
+  #     HyperRectangle(Vec3f0(zone["corner1"][:]),Vec3f0(zone["corner2"][:]-zone["corner1"][:])))
+  # end
+
+  # for zone in vars["spheres"]
+  #   push!(env.obstacle_set,
+  #     HyperSphere(Point3f0(zone["center"][:]), Float32(zone["radius"])))
+  # end
+end
+
+function add_obstacles3!(env::ISSCorner)
+  # ----------
+  # RECTANGLES
+
+  bottom_left = Vec3f0(+8.50,-0.50,+4.5)
+  top_right   = Vec3f0(+9.25,+0.25,+5.25)
+  push!(env.obstacle_set, HyperRectangle(bottom_left, top_right-bottom_left))
+  bottom_left = Vec3f0(+10.50,-0.5,+4.75)
+  top_right   = Vec3f0(+11.00,-0.0,+5.00)
+  push!(env.obstacle_set, HyperRectangle(bottom_left, top_right-bottom_left))
+  bottom_left = [+10.75 ; +3.5 ; +4.50 ]
+  top_right   = [+11.50 ; +4.2 ; +5.25 ]
+  center = ( bottom_left + top_right ) ./ 2.
+  radius = 0.4
+  push!(env.obstacle_set, HyperSphere(Point3f0(center), Float32(radius)))
+  bottom_left = Vec3f0(+10.00,+5.5,+4.75)
+  top_right   = Vec3f0(+10.75,+7.0,+5.75)
+  push!(env.obstacle_set, HyperRectangle(bottom_left, top_right-bottom_left))
+  # ----------
+
+
+  # vars = matread(joinpath(Pkg.dir("GuSTO"), "src", "environment","iss_corner.mat"))
+  # for zone in vars["rectangles"]
+  #   push!(env.obstacle_set,
+  #     HyperRectangle(Vec3f0(zone["corner1"][:]),Vec3f0(zone["corner2"][:]-zone["corner1"][:])))
+  # end
+
+  # for zone in vars["spheres"]
+  #   push!(env.obstacle_set,
+  #     HyperSphere(Point3f0(zone["center"][:]), Float32(zone["radius"])))
+  # end
+end

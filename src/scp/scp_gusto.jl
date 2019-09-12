@@ -72,6 +72,8 @@ function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem,
 	first_time = true
 	prob = minimize(0.)
 	while (SCPS.iterations < iter_cap)
+		@show SCPS.iterations
+
 		tic()
 
 		# Set up, solve problem
@@ -107,7 +109,7 @@ function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem,
 		
 		# Check trust regions
 		push!(trust_region_satisfied_vec, trust_region_satisfied_gusto(new_traj, SCPS.traj, SCPP))
-		push!(convex_ineq_satisfied_vec, convex_ineq_satisfied_gusto(new_traj, SCPS.traj, SCPC, SCPP))
+		push!(convex_ineq_satisfied_vec, nonconvex_ineq_satisfied_gusto(new_traj, SCPS.traj, SCPC, SCPP))
 
 	    if trust_region_satisfied_vec[end]
 	    	push!(rho_vec, trust_region_ratio_gusto(new_traj, SCPS.traj, SCPP))			
@@ -151,9 +153,14 @@ function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem,
 		!SCPS.accept_solution[end] ? continue : nothing
 
 		if SCPS.convergence_measure[end] <= param.convergence_threshold ||
-		   (SCPS.iterations > 4 && convex_ineq_satisfied_vec[end] == true)
+		   (SCPS.iterations >= 2 && convex_ineq_satisfied_vec[end] == true)
+
 			SCPS.converged = true
 			convex_ineq_satisfied_vec[end] && (SCPS.successful == true)
+
+			if !convex_ineq_satisfied_vec[end]
+				warn("[scp_gusto.jl::solve_gusto_cvx!] Returning solution which doesn't satisfy constraints.")
+			end
 
 			push!(X_vec, copy(SCPS.traj.X))
 			push!(Sigmas_vec, copy(SCPP.PD.model.Sigmas))
@@ -259,6 +266,9 @@ function nonconvex_ineq_satisfied_gusto(traj::Trajectory, traj_prev::Trajectory,
   # checks for satisfaction of convex state inequalities and nonconvex->convexified state inequalities
 	for (f, k, i) in (SCPC.nonconvex_state_ineq...)
 		if f(traj, traj_prev, SCPP, k, i) > SCPP.param.alg.epsilon
+			println("[scp_gusto.jl::nonconvex_ineq_satisfied_gusto] not satisfied.")
+			@show f
+			@show k
 			return false
 		end
 	end
@@ -396,7 +406,7 @@ function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="IPOPT", 
 	push!(rho_vec, trust_region_ratio_gusto(SCPS.traj, SCPS.traj, SCPP))
 	param.obstacle_toggle_distance = Delta_vec[end]/8 + model.clearance # TODO: Generalize clearance
 
-	while (SCPS.iterations <= iter_cap)
+	while (SCPS.iterations <= iter_cap)		
 		time_start = tic()
 
 		# Set up, solve problem
