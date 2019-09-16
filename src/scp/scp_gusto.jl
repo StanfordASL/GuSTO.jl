@@ -118,7 +118,7 @@ function solve_gusto_jump!(SCPS::SCPSolution, SCPP::SCPProblem, solver="Ipopt", 
 		
 		# Check trust regions
 		push!(trust_region_satisfied_vec, trust_region_satisfied_gusto(new_traj, SCPS.traj, SCPP))
-		push!(convex_ineq_satisfied_vec, convex_ineq_satisfied_gusto_jump(new_traj, new_traj, SCPC, SCPP))
+		push!(convex_ineq_satisfied_vec, convex_ineq_satisfied_gusto_jump(new_traj, SCPS.traj, SCPC, SCPP))
 
 		if trust_region_satisfied_vec[end]
 			push!(ρ_vec, trust_region_ratio_gusto(new_traj, SCPS.traj, SCPP))			
