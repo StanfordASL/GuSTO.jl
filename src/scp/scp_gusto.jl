@@ -30,7 +30,7 @@ end
 ######
 
 function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem, 
-						  solver="Mosek", max_iter=50, force=false; kwarg...)
+						  solver="Mosek", max_iter=11, force=false; kwarg...)
 	# pygui(true)
 	# Solves a sequential convex programming problem
 	# Inputs:
@@ -91,7 +91,7 @@ function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem,
 	    if prob.status != :Optimal
 	      warn("GuSTO SCP iteration failed to find an optimal solution")
 	      push!(SCPS.iter_elapsed_times,toq()) 
-	      return
+	      return X_vec, Sigmas_vec # break
 	    end
 
 		# Recover solution
@@ -141,11 +141,6 @@ function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem,
 		end
 		param.obstacle_toggle_distance = Delta_vec[end]/8 + model.clearance
 
-		iter_elapsed_time = toq()
-		push!(SCPS.iter_elapsed_times, iter_elapsed_time)
-		SCPS.total_time += iter_elapsed_time
-		SCPS.iterations += 1
-
 		if omega_vec[end] > omegamax
 			warn("GuSTO SCP omegamax exceeded")
 			break
@@ -153,7 +148,7 @@ function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem,
 		!SCPS.accept_solution[end] ? continue : nothing
 
 		if SCPS.convergence_measure[end] <= param.convergence_threshold ||
-		   (SCPS.iterations >= 2 && convex_ineq_satisfied_vec[end] == true)
+		   (SCPS.iterations >= 3 && convex_ineq_satisfied_vec[end] == true)
 
 			SCPS.converged = true
 			convex_ineq_satisfied_vec[end] && (SCPS.successful == true)
@@ -169,8 +164,15 @@ function solve_gusto_cvx!(SCPS::SCPSolution, SCPP::SCPProblem,
 			force ? continue : break
 
 		end
+
+		iter_elapsed_time = toq()
+		SCPS.total_time += iter_elapsed_time
+		push!(SCPS.iter_elapsed_times, iter_elapsed_time)
+
+		SCPS.iterations += 1
 	end
 
+	return X_vec, Sigmas_vec
 end
 
 # Define this for a dynamics model if model parameters need to be updated

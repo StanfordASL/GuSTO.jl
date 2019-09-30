@@ -18,10 +18,10 @@ function Astrobee3D{T}() where T
   r = sqrt(3)*s   # inflate to sphere
 
   # flight robot param: freeflyer/astrobee/config/world/iss.config
-  mass = 7.0 
-  hard_limit_vel = 0.5 # Actual limit: 0.5
+  mass = 7.2 # 7.0 
+  hard_limit_vel = 0.15 # 0.5 # Actual limit: 0.5
   hard_limit_accel = 0.1 
-  hard_limit_omega = 45*pi/180 
+  hard_limit_omega = 0.1*45*pi/180 
   hard_limit_alpha = 50*pi/180 
  
   J = 0.1083*eye(3) 
